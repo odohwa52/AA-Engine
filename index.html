@@ -189,8 +189,8 @@ html, body { height: 100%; font-family: 'DM Sans', sans-serif; background: var(-
 .upload-zone.has-images:hover { background: var(--surface); border-color: var(--border); }
 /* Image strip */
 .upload-strip { display: flex; flex-direction: column; gap: 6px; }
-.upload-strip-item { position: relative; border-radius: 8px; overflow: hidden; background: var(--bg); }
-.upload-strip-item img { width: 100%; display: block; border-radius: 8px; max-height: 220px; object-fit: contain; background: #ffffff; }
+.upload-strip-item { position: relative; border-radius: 8px; overflow: hidden; background: #ffffff; border: 1px solid var(--border); }
+.upload-strip-item img { width: 100%; display: block; border-radius: 8px; object-fit: contain; background: #ffffff; }
 .upload-strip-item-overlay { position: absolute; inset: 0; background: rgba(0,0,0,0); transition: background 0.15s; border-radius: 8px; display: flex; align-items: center; justify-content: center; gap: 6px; opacity: 0; }
 .upload-strip-item:hover .upload-strip-item-overlay { background: rgba(0,0,0,0.38); opacity: 1; }
 .strip-btn { background: rgba(255,255,255,0.93); border: none; border-radius: 5px; padding: 4px 9px; font-size: 11px; font-weight: 600; cursor: pointer; color: var(--text-primary); }
@@ -655,9 +655,14 @@ body.dark .processing-overlay { background: rgba(26,29,46,0.9); }
               </div>
             </div>
           </div>
-          <div style="font-size:12px;color:var(--text-secondary);margin-bottom:16px;display:flex;align-items:center;gap:6px;">
-            <span style="background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:1px 6px;font-family:monospace;font-size:11px;">Ctrl+V</span>
-            Paste a screenshot directly — goes into question slot first, then solution
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
+            <span style="font-size:12px;color:var(--text-secondary);display:flex;align-items:center;gap:5px;">
+              <span style="background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:1px 6px;font-family:monospace;font-size:11px;">Ctrl+V</span>
+              Paste screenshot into:
+            </span>
+            <button id="paste-target-q" onclick="setPasteTarget('q')" style="border:1px solid var(--accent);border-radius:6px;padding:4px 12px;font-size:12px;font-weight:500;cursor:pointer;background:var(--accent);color:#fff;transition:all 0.15s;">Question</button>
+            <button id="paste-target-s" onclick="setPasteTarget('s')" style="border:1px solid var(--border);border-radius:6px;padding:4px 12px;font-size:12px;font-weight:500;cursor:pointer;background:var(--surface);color:var(--text-secondary);transition:all 0.15s;">Solution</button>
+            <span style="font-size:11.5px;color:var(--text-secondary);">— paste multiple times to add pages</span>
           </div>
 
           <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;position:relative;">
@@ -690,9 +695,9 @@ body.dark .processing-overlay { background: rgba(26,29,46,0.9); }
                 <label class="form-label">Subtopic(s)</label>
                 <div id="subtopic-tag-box" style="min-height:38px;border:1px solid var(--border);border-radius:8px;background:var(--surface);padding:4px 8px;display:flex;flex-wrap:wrap;gap:4px;align-items:center;cursor:text;transition:border-color 0.15s;" onclick="document.getElementById('subtopic-tag-input').focus()">
                   <div id="subtopic-chips" style="display:contents;"></div>
-                  <input id="subtopic-tag-input" placeholder="Type subtopic, press Enter" style="border:none;outline:none;background:transparent;font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text-primary);flex:1;min-width:120px;padding:2px 0;" onkeydown="handleSubtopicKey(event)" oninput="showSubtopicSuggestions()" onfocus="document.getElementById('subtopic-tag-box').style.borderColor='var(--accent)'" onblur="document.getElementById('subtopic-tag-box').style.borderColor='var(--border)';setTimeout(hideSubtopicSuggestions,150)" />
+                  <input id="subtopic-tag-input" placeholder="Click to browse, or type to search…" style="border:none;outline:none;background:transparent;font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text-primary);flex:1;min-width:120px;padding:2px 0;" onkeydown="handleSubtopicKey(event)" oninput="showSubtopicSuggestions()" onfocus="onSubtopicFocus()" onblur="document.getElementById('subtopic-tag-box').style.borderColor='var(--border)';setTimeout(hideSubtopicSuggestions,150)" />
                 </div>
-                <div id="subtopic-suggestions" style="display:none;position:absolute;z-index:50;background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.1);max-height:180px;overflow-y:auto;margin-top:2px;min-width:200px;"></div>
+                <div id="subtopic-suggestions" style="display:none;position:absolute;z-index:50;background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.1);max-height:280px;overflow-y:auto;margin-top:2px;min-width:260px;"></div>
                 <!-- Hidden field for form submission compatibility -->
                 <input type="hidden" id="up-subtopic" value="" />
               </div>
@@ -1679,7 +1684,7 @@ function renderBank() {
       </div>
       <div class="problem-expanded" id="expanded-${p.id}">
         ${p.questionImage
-          ? `<img src="${p.questionImage}" style="max-width:100%;border-radius:8px;margin-bottom:14px;display:block;background:#ffffff;object-fit:contain;" />`
+          ? `<img src="${p.questionImage}" style="width:100%;border-radius:8px;margin-bottom:14px;display:block;background:#ffffff;object-fit:contain;" />`
           : `<div class="question-text">${(p.question||'').replace(/\n/g,'<br>')}</div>`}
         ${p.diagramNote ? `<div class="diagram-slot"><div style="font-size:12px;font-weight:500;margin-bottom:4px;">📐 Diagram note</div><div>${p.diagramNote}</div></div>` : ''}
         <div class="markscheme-box">
@@ -1754,7 +1759,7 @@ function openProblemDetail(id) {
 
   // Question display — image first if present
   const questionHtml = p.questionImage
-    ? `<img src="${p.questionImage}" style="max-width:100%;border-radius:8px;margin-bottom:12px;display:block;background:#ffffff;object-fit:contain;" />`
+    ? `<img src="${p.questionImage}" style="width:100%;border-radius:8px;margin-bottom:12px;display:block;background:#ffffff;object-fit:contain;" />`
     : `<div class="question-text" style="font-size:15px;">${(p.question||'').replace(/\n/g,'<br>')}</div>`;
 
   // Markscheme — structured if available
@@ -1974,15 +1979,22 @@ function simulateAIDetection() {
 }
 
 // ── Subtopic tag chip system ──
-let subtopicTags = []; // array of strings
+let subtopicTags = [];
 let suggestionIndex = -1;
 
+// All subtopics across all topics — built once
+function getAllSubtopics() {
+  return Object.entries(TOPICS).flatMap(([topicNum, t]) =>
+    t.subtopics.map(s => ({ label: s, topic: topicNum }))
+  );
+}
+
 function updateUploadSubtopics() {
-  // When topic changes, clear existing tags and update suggestions
+  // Topic changed — clear tags and reset input
   subtopicTags = [];
   renderSubtopicChips();
   document.getElementById('up-subtopic').value = '';
-  document.getElementById('subtopic-tag-input').placeholder = 'Type subtopic, press Enter';
+  hideSubtopicSuggestions();
 }
 
 function renderSubtopicChips() {
@@ -1991,7 +2003,6 @@ function renderSubtopicChips() {
   container.innerHTML = subtopicTags.map((tag, i) =>
     `<span class="subtopic-chip">${tag}<button type="button" onclick="removeSubtopicTag(${i})">×</button></span>`
   ).join('');
-  // Keep hidden field in sync for form validation
   document.getElementById('up-subtopic').value = subtopicTags.join(', ');
 }
 
@@ -2010,6 +2021,7 @@ function addSubtopicTag(val) {
   const inp = document.getElementById('subtopic-tag-input');
   if (inp) { inp.value = ''; }
   hideSubtopicSuggestions();
+  suggestionIndex = -1;
 }
 
 function handleSubtopicKey(e) {
@@ -2017,8 +2029,8 @@ function handleSubtopicKey(e) {
   if (e.key === 'Enter' || e.key === ',') {
     e.preventDefault();
     if (suggestionIndex >= 0 && suggestions[suggestionIndex]) {
-      addSubtopicTag(suggestions[suggestionIndex].textContent);
-    } else {
+      addSubtopicTag(suggestions[suggestionIndex].dataset.value);
+    } else if (e.target.value.trim()) {
       addSubtopicTag(e.target.value);
     }
     suggestionIndex = -1;
@@ -2041,17 +2053,55 @@ function handleSubtopicKey(e) {
 function showSubtopicSuggestions() {
   const inp = document.getElementById('subtopic-tag-input');
   const box = document.getElementById('subtopic-suggestions');
-  const topic = document.getElementById('up-topic').value;
   if (!inp || !box) return;
   const q = inp.value.toLowerCase().trim();
-  const all = topic && TOPICS[topic] ? TOPICS[topic].subtopics : Object.values(TOPICS).flatMap(t => t.subtopics);
-  const matches = all.filter(s => s.toLowerCase().includes(q) && !subtopicTags.includes(s));
+  const selectedTopic = document.getElementById('up-topic').value;
+  const all = getAllSubtopics();
+
+  // Filter: match query + not already added
+  // Show selected topic's subtopics first if a topic is chosen, then others
+  let matches;
+  if (!q) {
+    // No query — show all, selected topic first
+    const topicFirst = selectedTopic
+      ? all.filter(s => s.topic === selectedTopic)
+      : [];
+    const rest = selectedTopic
+      ? all.filter(s => s.topic !== selectedTopic)
+      : all;
+    matches = [...topicFirst, ...rest].filter(s => !subtopicTags.includes(s.label));
+  } else {
+    matches = all.filter(s =>
+      s.label.toLowerCase().includes(q) && !subtopicTags.includes(s.label)
+    );
+    // Sort: selected topic first
+    if (selectedTopic) {
+      matches.sort((a, b) => (b.topic === selectedTopic) - (a.topic === selectedTopic));
+    }
+  }
+
   if (!matches.length) { box.style.display = 'none'; return; }
   suggestionIndex = -1;
-  box.innerHTML = matches.slice(0, 8).map(s =>
-    `<div class="subtopic-suggestion-item" onmousedown="addSubtopicTag('${s}')">${s}</div>`
-  ).join('');
+
+  // Group by topic number for clarity
+  const grouped = {};
+  matches.slice(0, 20).forEach(s => {
+    if (!grouped[s.topic]) grouped[s.topic] = [];
+    grouped[s.topic].push(s.label);
+  });
+
+  box.innerHTML = Object.entries(grouped).map(([topicNum, labels]) => `
+    <div style="padding:6px 12px 2px;font-size:10px;font-weight:700;color:var(--text-secondary);letter-spacing:0.5px;text-transform:uppercase;border-top:1px solid var(--border);margin-top:2px;">
+      Topic ${topicNum} — ${TOPICS[topicNum]?.name || ''}
+    </div>
+    ${labels.map(label => `<div class="subtopic-suggestion-item" data-value="${label}" onmousedown="addSubtopicTag('${label.replace(/'/g, "\\'")}')">${label}</div>`).join('')}
+  `).join('');
   box.style.display = 'block';
+}
+
+function onSubtopicFocus() {
+  document.getElementById('subtopic-tag-box').style.borderColor = 'var(--accent)';
+  showSubtopicSuggestions(); // show all options immediately on focus
 }
 
 function hideSubtopicSuggestions() {
@@ -2060,30 +2110,44 @@ function hideSubtopicSuggestions() {
 }
 
 // ── Paste screenshot handler ──
-// Works anywhere on the upload tab — Ctrl+V or Command+V pastes a screenshot
+// Shows a small floating indicator so user knows which slot the next paste will go into
+let pasteTarget = 'q'; // 'q' or 's' — which slot paste goes into
+
 function setupPasteHandler() {
   document.addEventListener('paste', async (e) => {
-    // Only activate when upload tab is visible
     if (!document.getElementById('screen-upload').classList.contains('active')) return;
     const items = Array.from(e.clipboardData?.items || []);
     const imageItems = items.filter(item => item.type.startsWith('image/'));
     if (!imageItems.length) return;
     e.preventDefault();
 
-    // Figure out which zone to paste into — question if empty, else solution if question has images
-    const targetType = uploadQImages.length === 0 ? 'q' : 's';
-    const label = targetType === 'q' ? 'question' : 'solution';
-    toast(`📋 Pasting screenshot into ${label} slot`);
-
     for (const item of imageItems) {
       const file = item.getAsFile();
       if (!file) continue;
       const entry = await readFileAsDataUrl(file);
-      if (targetType === 'q') uploadQImages.push(entry);
+      if (pasteTarget === 'q') uploadQImages.push(entry);
       else uploadSImages.push(entry);
     }
-    renderUploadZone(targetType);
-    if (targetType === 'q' && uploadQImages.length === 1) simulateAIDetection();
+    renderUploadZone(pasteTarget);
+    updatePasteTargetUI();
+    if (pasteTarget === 'q' && uploadQImages.length === 1) simulateAIDetection();
+    toast(`📋 Pasted into ${pasteTarget === 'q' ? 'question' : 'solution'} slot`);
+  });
+}
+
+function setPasteTarget(t) {
+  pasteTarget = t;
+  updatePasteTargetUI();
+}
+
+function updatePasteTargetUI() {
+  ['q','s'].forEach(t => {
+    const btn = document.getElementById('paste-target-' + t);
+    if (btn) {
+      btn.style.background = pasteTarget === t ? 'var(--accent)' : 'var(--surface)';
+      btn.style.color = pasteTarget === t ? '#fff' : 'var(--text-secondary)';
+      btn.style.borderColor = pasteTarget === t ? 'var(--accent)' : 'var(--border)';
+    }
   });
 }
 
@@ -2149,6 +2213,9 @@ function clearUploadForm() {
   const uq = document.getElementById('up-question'); if(uq) uq.value = '';
   const us = document.getElementById('up-solution'); if(us) us.value = '';
   const badge = document.getElementById('ai-detected-badge'); if(badge) badge.style.display = 'none';
+  // Reset paste target to question
+  pasteTarget = 'q';
+  updatePasteTargetUI();
 }
 
 
@@ -2470,7 +2537,7 @@ function renderReviewQueue() {
 
         <div class="diagram-slot" id="review-diagram" style="margin-bottom:16px;">
           ${p.questionImage
-            ? `<div style="font-size:11px;font-weight:700;color:var(--text-secondary);letter-spacing:0.4px;text-transform:uppercase;margin-bottom:8px;">Original Photo</div><img src="${p.questionImage}" style="max-width:100%;max-height:300px;object-fit:contain;border-radius:6px;background:#ffffff;" />`
+            ? `<div style="font-size:11px;font-weight:700;color:var(--text-secondary);letter-spacing:0.4px;text-transform:uppercase;margin-bottom:8px;">Original Photo</div><img src="${p.questionImage}" style="width:100%;object-fit:contain;border-radius:6px;background:#ffffff;display:block;" />`
             : p.diagramNote
               ? `<div style="font-size:12px;font-weight:600;margin-bottom:4px;">📐 Diagram required</div><div style="font-size:12.5px;color:var(--text-secondary);">${p.diagramNote}</div><div style="font-size:11.5px;color:var(--amber);margin-top:6px;display:flex;align-items:center;gap:4px;"><svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 1l7 13H1L8 1z"/><line x1="8" y1="6" x2="8" y2="9"/></svg> Upload Desmos export or image above</div>`
               : '<div style="color:var(--text-secondary);font-size:12.5px;">No diagram required</div>'}
@@ -2486,7 +2553,7 @@ function renderReviewQueue() {
           <span class="final-answer-value">${p.finalAnswer || '—'}</span>
         </div>
 
-        ${p.solutionImage ? `<div style="margin-top:14px;"><div style="font-size:11px;font-weight:700;color:var(--text-secondary);letter-spacing:0.4px;text-transform:uppercase;margin-bottom:8px;">Solution Photo</div><img src="${p.solutionImage}" style="max-width:100%;max-height:300px;object-fit:contain;border-radius:6px;border:1px solid var(--border);background:#ffffff;" /></div>` : ''}
+        ${p.solutionImage ? `<div style="margin-top:14px;"><div style="font-size:11px;font-weight:700;color:var(--text-secondary);letter-spacing:0.4px;text-transform:uppercase;margin-bottom:8px;">Solution Photo</div><img src="${p.solutionImage}" style="width:100%;object-fit:contain;border-radius:6px;border:1px solid var(--border);background:#ffffff;display:block;" /></div>` : ''}
       </div>
 
       <div class="review-sidebar-panel">
@@ -2589,7 +2656,7 @@ function renderReviewProblem(p) {
     if (p.questionImage) {
       qEl.innerHTML = `
         <div style="margin-bottom:16px;">
-          <img src="${p.questionImage}" style="max-width:100%;border-radius:8px;display:block;background:#ffffff;object-fit:contain;" />
+          <img src="${p.questionImage}" style="width:100%;border-radius:8px;display:block;background:#ffffff;object-fit:contain;" />
           ${p.question ? `<div style="margin-top:10px;font-size:12.5px;color:var(--text-secondary);background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px 10px;">${p.question.replace(/\n/g,'<br>')}</div>` : ''}
         </div>`;
     } else {
@@ -3824,7 +3891,7 @@ function renderStudentProblemDisplay(containerId, problems, mode) {
 
   // Question content — image takes priority over text
   const questionContent = p.questionImage
-    ? `<img src="${p.questionImage}" style="max-width:100%;border-radius:8px;display:block;margin-bottom:12px;background:#ffffff;object-fit:contain;" alt="Question" />`
+    ? `<img src="${p.questionImage}" style="width:100%;border-radius:8px;display:block;margin-bottom:12px;background:#ffffff;object-fit:contain;" alt="Question" />`
     : `<div class="question-text" style="font-size:15px;">${(p.question||'').replace(/\n/g,'<br>')}</div>`;
 
   el.innerHTML = `
