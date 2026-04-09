@@ -1812,12 +1812,122 @@ function openProblemDetail(id) {
 function readFileAsDataUrl(file) {
   return new Promise(resolve => {
     const r = new FileReader();
-    r.onload = e => resolve({ dataUrl: e.target.result, name: file.name });
+    r.onload = async e => {
+      // Auto-process: trim dark/white borders then normalize width
+      const processed = await processUploadedImage(e.target.result);
+      resolve({ dataUrl: processed, name: file.name });
+    };
     r.readAsDataURL(file);
   });
 }
 
+// ── Image processing pipeline ──
+const NORMALIZE_WIDTH = 900; // all images normalized to this pixel width
+
+async function processUploadedImage(dataUrl) {
+  try {
+    const trimmed = await autoCropImage(dataUrl);
+    const normalized = await normalizeImageWidth(trimmed, NORMALIZE_WIDTH);
+    return normalized;
+  } catch (e) {
+    return dataUrl; // fallback: return original if anything fails
+  }
+}
+
+// Auto-crop: remove uniform dark or light border rows/columns
+function autoCropImage(dataUrl) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const w = img.naturalWidth;
+      const h = img.naturalHeight;
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, w, h);
+      ctx.drawImage(img, 0, 0);
+      const data = ctx.getImageData(0, 0, w, h).data;
+
+      // Returns true if a pixel is "background" (very dark or very light)
+      function isBg(x, y) {
+        const i = (y * w + x) * 4;
+        const r = data[i], g = data[i+1], b = data[i+2];
+        const brightness = (r + g + b) / 3;
+        return brightness < 30 || brightness > 230; // dark or near-white
+      }
+
+      // Scan a full row — bg if >92% of pixels are background
+      function rowIsBg(y) {
+        let bgCount = 0;
+        for (let x = 0; x < w; x++) { if (isBg(x, y)) bgCount++; }
+        return bgCount / w > 0.92;
+      }
+
+      // Scan a full column — bg if >92% of pixels are background
+      function colIsBg(x) {
+        let bgCount = 0;
+        for (let y = 0; y < h; y++) { if (isBg(x, y)) bgCount++; }
+        return bgCount / h > 0.92;
+      }
+
+      // Find crop bounds
+      let top = 0, bottom = h - 1, left = 0, right = w - 1;
+      while (top < h && rowIsBg(top)) top++;
+      while (bottom > top && rowIsBg(bottom)) bottom--;
+      while (left < w && colIsBg(left)) left++;
+      while (right > left && colIsBg(right)) right--;
+
+      // Add a small white padding (8px) so content doesn't touch edges
+      const pad = 8;
+      top    = Math.max(0, top - pad);
+      bottom = Math.min(h - 1, bottom + pad);
+      left   = Math.max(0, left - pad);
+      right  = Math.min(w - 1, right + pad);
+
+      const cropW = right - left + 1;
+      const cropH = bottom - top + 1;
+
+      // If crop removed very little, skip (avoid cropping valid content)
+      if (cropW < 10 || cropH < 10) { resolve(dataUrl); return; }
+
+      const outCanvas = document.createElement('canvas');
+      outCanvas.width = cropW; outCanvas.height = cropH;
+      const outCtx = outCanvas.getContext('2d');
+      outCtx.fillStyle = '#ffffff';
+      outCtx.fillRect(0, 0, cropW, cropH);
+      outCtx.drawImage(canvas, left, top, cropW, cropH, 0, 0, cropW, cropH);
+      resolve(outCanvas.toDataURL('image/jpeg', 0.93));
+    };
+    img.onerror = () => reject(new Error('Image load failed'));
+    img.src = dataUrl;
+  });
+}
+
+// Normalize: scale image to target width, pad height with white if shorter
+function normalizeImageWidth(dataUrl, targetW) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = targetW / img.naturalWidth;
+      const scaledH = Math.round(img.naturalHeight * scale);
+
+      const canvas = document.createElement('canvas');
+      canvas.width = targetW;
+      canvas.height = scaledH;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, targetW, scaledH);
+      ctx.drawImage(img, 0, 0, targetW, scaledH);
+      resolve(canvas.toDataURL('image/jpeg', 0.93));
+    };
+    img.onerror = () => reject(new Error('Image load failed'));
+    img.src = dataUrl;
+  });
+}
+
 // Stitch an array of dataUrls vertically on a canvas → single dataUrl
+// Images are already normalized to the same width so no centering needed
 function stitchImages(entries) {
   return new Promise(resolve => {
     if (!entries.length) { resolve(null); return; }
@@ -1830,23 +1940,21 @@ function stitchImages(entries) {
         imgs[i] = img;
         loaded++;
         if (loaded === entries.length) {
-          const maxW = Math.max(...imgs.map(im => im.naturalWidth));
+          // All images are already the same width (NORMALIZE_WIDTH)
+          const w = imgs[0].naturalWidth;
           const totalH = imgs.reduce((sum, im) => sum + im.naturalHeight, 0);
           const canvas = document.createElement('canvas');
-          canvas.width = maxW;
+          canvas.width = w;
           canvas.height = totalH;
           const ctx = canvas.getContext('2d');
-          // Fill white so transparent or dark-background images look clean
           ctx.fillStyle = '#ffffff';
-          ctx.fillRect(0, 0, maxW, totalH);
+          ctx.fillRect(0, 0, w, totalH);
           let y = 0;
           imgs.forEach(im => {
-            // Centre narrower images horizontally
-            const x = Math.floor((maxW - im.naturalWidth) / 2);
-            ctx.drawImage(im, x, y);
+            ctx.drawImage(im, 0, y);
             y += im.naturalHeight;
           });
-          resolve(canvas.toDataURL('image/jpeg', 0.92));
+          resolve(canvas.toDataURL('image/jpeg', 0.93));
         }
       };
       img.src = e.dataUrl;
