@@ -21,6 +21,7 @@
   --green: #10B981; --green-light: #F0FDF4;
   --red: #EF4444; --red-light: #FEF2F2;
   --sidebar-w: 220px; --header-h: 56px;
+  --img-display-width: 100%; /* controlled by image width slider in Settings */
 }
 body.dark {
   --bg: #0F1117; --surface: #1A1D2E;
@@ -151,7 +152,9 @@ html, body { height: 100%; font-family: 'DM Sans', sans-serif; background: var(-
 .problem-expanded.open { display: block; }
 .question-text { font-size: 14px; line-height: 1.75; color: var(--text-primary); margin-bottom: 18px; }
 .markscheme-box { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 14px; max-width: 100%; }
-.markscheme-box img { max-width: 100%; width: 100%; height: auto; object-fit: contain; background: #ffffff; border-radius: 6px; display: block; }
+.markscheme-box img { width: var(--img-display-width); max-width: 100%; height: auto; object-fit: contain; background: #ffffff; border-radius: 6px; display: block; }
+/* All uploaded problem images respect the display width setting */
+.problem-img { width: var(--img-display-width) !important; max-width: 100% !important; height: auto !important; object-fit: contain; background: #ffffff; border-radius: 8px; display: block; }
 .ms-label { font-size: 10px; font-weight: 700; color: var(--text-secondary); letter-spacing: 1px; text-transform: uppercase; margin-bottom: 12px; }
 .ms-step { display: flex; gap: 10px; margin-bottom: 7px; font-size: 13.5px; line-height: 1.55; }
 .ms-mark { font-size: 11px; font-weight: 700; color: var(--accent); flex-shrink: 0; width: 30px; margin-top: 1px; }
@@ -1011,6 +1014,18 @@ body.dark .processing-overlay { background: rgba(26,29,46,0.9); }
             <div><div class="settings-label">Dark Mode</div><div class="settings-hint">Applies to both tutor and student views</div></div>
             <div class="toggle" id="dark-toggle" onclick="toggleDark()"></div>
           </div>
+          <div class="settings-row" style="flex-direction:column;align-items:flex-start;gap:10px;">
+            <div>
+              <div class="settings-label">Problem image display width</div>
+              <div class="settings-hint">Adjusts how wide uploaded photos appear — doesn't affect stored quality</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;width:100%;">
+              <input type="range" id="img-width-slider" min="30" max="100" value="100"
+                style="flex:1;accent-color:var(--accent);"
+                oninput="setImageDisplayWidth(this.value)" />
+              <span id="img-width-label" style="font-size:13px;font-weight:500;color:var(--text-primary);min-width:38px;text-align:right;">100%</span>
+            </div>
+          </div>
         </div>
 
         <div class="settings-section">
@@ -1521,7 +1536,15 @@ function showTab(tab, el) {
   if(tab==='session') buildSessionStudentSelect();
   if(tab==='generate') buildGenSubtopics();
   if(tab==='upload') { setTimeout(()=>{ setupDropZone('q'); setupDropZone('s'); }, 50); }
-  if(tab==='settings') { setTimeout(calcStorageUsage, 100); }
+  if(tab==='settings') {
+    setTimeout(calcStorageUsage, 100);
+    // Sync slider to current value
+    const saved = DB.get('img_display_width') || 100;
+    const slider = document.getElementById('img-width-slider');
+    const label = document.getElementById('img-width-label');
+    if (slider) slider.value = saved;
+    if (label) label.textContent = saved + '%';
+  }
 }
 
 // ══════════════════════════════════════════════════
@@ -1684,7 +1707,7 @@ function renderBank() {
       </div>
       <div class="problem-expanded" id="expanded-${p.id}">
         ${p.questionImage
-          ? `<img src="${p.questionImage}" style="width:100%;border-radius:8px;margin-bottom:14px;display:block;background:#ffffff;object-fit:contain;" />`
+          ? `<img class="problem-img" src="${p.questionImage}" style="width:100%;border-radius:8px;margin-bottom:14px;display:block;background:#ffffff;object-fit:contain;" />`
           : `<div class="question-text">${(p.question||'').replace(/\n/g,'<br>')}</div>`}
         ${p.diagramNote ? `<div class="diagram-slot"><div style="font-size:12px;font-weight:500;margin-bottom:4px;">📐 Diagram note</div><div>${p.diagramNote}</div></div>` : ''}
         <div class="markscheme-box">
@@ -1759,7 +1782,7 @@ function openProblemDetail(id) {
 
   // Question display — image first if present
   const questionHtml = p.questionImage
-    ? `<img src="${p.questionImage}" style="width:100%;border-radius:8px;margin-bottom:12px;display:block;background:#ffffff;object-fit:contain;" />`
+    ? `<img class="problem-img" src="${p.questionImage}" style="width:100%;border-radius:8px;margin-bottom:12px;display:block;background:#ffffff;object-fit:contain;" />`
     : `<div class="question-text" style="font-size:15px;">${(p.question||'').replace(/\n/g,'<br>')}</div>`;
 
   // Markscheme — structured if available
@@ -1778,7 +1801,7 @@ function openProblemDetail(id) {
 
   // Solution image
   const solImgHtml = p.solutionImage
-    ? `<div style="margin-top:14px;"><div style="font-size:11px;font-weight:700;color:var(--text-secondary);letter-spacing:0.6px;text-transform:uppercase;margin-bottom:6px;">Solution Photo</div><img src="${p.solutionImage}" style="width:100%;max-width:100%;border-radius:8px;background:#ffffff;object-fit:contain;display:block;" /></div>`
+    ? `<div style="margin-top:14px;"><div style="font-size:11px;font-weight:700;color:var(--text-secondary);letter-spacing:0.6px;text-transform:uppercase;margin-bottom:6px;">Solution Photo</div><img class="problem-img" src="${p.solutionImage}" style="width:100%;max-width:100%;border-radius:8px;background:#ffffff;object-fit:contain;display:block;" /></div>`
     : '';
 
   document.getElementById('pdm-title').textContent = `T${p.topic} · ${p.subtopic} — ${p.marks} marks`;
@@ -1822,7 +1845,7 @@ function readFileAsDataUrl(file) {
 }
 
 // ── Image processing pipeline ──
-const NORMALIZE_WIDTH = 900; // all images normalized to this pixel width
+const NORMALIZE_WIDTH = 680; // normalized width — fits inside 760px problem display with padding
 
 async function processUploadedImage(dataUrl) {
   try {
@@ -2645,7 +2668,7 @@ function renderReviewQueue() {
 
         <div class="diagram-slot" id="review-diagram" style="margin-bottom:16px;">
           ${p.questionImage
-            ? `<div style="font-size:11px;font-weight:700;color:var(--text-secondary);letter-spacing:0.4px;text-transform:uppercase;margin-bottom:8px;">Original Photo</div><img src="${p.questionImage}" style="width:100%;object-fit:contain;border-radius:6px;background:#ffffff;display:block;" />`
+            ? `<div style="font-size:11px;font-weight:700;color:var(--text-secondary);letter-spacing:0.4px;text-transform:uppercase;margin-bottom:8px;">Original Photo</div><img class="problem-img" src="${p.questionImage}" style="width:100%;object-fit:contain;border-radius:6px;background:#ffffff;display:block;" />`
             : p.diagramNote
               ? `<div style="font-size:12px;font-weight:600;margin-bottom:4px;">📐 Diagram required</div><div style="font-size:12.5px;color:var(--text-secondary);">${p.diagramNote}</div><div style="font-size:11.5px;color:var(--amber);margin-top:6px;display:flex;align-items:center;gap:4px;"><svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 1l7 13H1L8 1z"/><line x1="8" y1="6" x2="8" y2="9"/></svg> Upload Desmos export or image above</div>`
               : '<div style="color:var(--text-secondary);font-size:12.5px;">No diagram required</div>'}
@@ -2661,7 +2684,7 @@ function renderReviewQueue() {
           <span class="final-answer-value">${p.finalAnswer || '—'}</span>
         </div>
 
-        ${p.solutionImage ? `<div style="margin-top:14px;"><div style="font-size:11px;font-weight:700;color:var(--text-secondary);letter-spacing:0.4px;text-transform:uppercase;margin-bottom:8px;">Solution Photo</div><img src="${p.solutionImage}" style="width:100%;object-fit:contain;border-radius:6px;border:1px solid var(--border);background:#ffffff;display:block;" /></div>` : ''}
+        ${p.solutionImage ? `<div style="margin-top:14px;"><div style="font-size:11px;font-weight:700;color:var(--text-secondary);letter-spacing:0.4px;text-transform:uppercase;margin-bottom:8px;">Solution Photo</div><img class="problem-img" src="${p.solutionImage}" style="width:100%;object-fit:contain;border-radius:6px;border:1px solid var(--border);background:#ffffff;display:block;" /></div>` : ''}
       </div>
 
       <div class="review-sidebar-panel">
@@ -2764,7 +2787,7 @@ function renderReviewProblem(p) {
     if (p.questionImage) {
       qEl.innerHTML = `
         <div style="margin-bottom:16px;">
-          <img src="${p.questionImage}" style="width:100%;border-radius:8px;display:block;background:#ffffff;object-fit:contain;" />
+          <img class="problem-img" src="${p.questionImage}" style="width:100%;border-radius:8px;display:block;background:#ffffff;object-fit:contain;" />
           ${p.question ? `<div style="margin-top:10px;font-size:12.5px;color:var(--text-secondary);background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px 10px;">${p.question.replace(/\n/g,'<br>')}</div>` : ''}
         </div>`;
     } else {
@@ -2999,7 +3022,7 @@ function renderSessionProblem() {
 
   // Question — image first, then text
   if (p.questionImage) {
-    qEl.innerHTML = `<img src="${p.questionImage}" style="width:100%;max-width:100%;border-radius:8px;background:#ffffff;object-fit:contain;display:block;" />`;
+    qEl.innerHTML = `<img class="problem-img" src="${p.questionImage}" style="width:100%;max-width:100%;border-radius:8px;background:#ffffff;object-fit:contain;display:block;" />`;
   } else {
     qEl.innerHTML = `<div class="session-question">${(p.question||'').replace(/\n/g,'<br>')}</div>`;
   }
@@ -3045,7 +3068,7 @@ function toggleSessionSolution() {
       const imgEl = document.createElement('div');
       imgEl.className = 'session-sol-img';
       imgEl.style.marginTop = '14px';
-      imgEl.innerHTML = `<img src="${p.solutionImage}" style="width:100%;max-width:100%;border-radius:8px;background:#ffffff;object-fit:contain;display:block;" />`;
+      imgEl.innerHTML = `<img class="problem-img" src="${p.solutionImage}" style="width:100%;max-width:100%;border-radius:8px;background:#ffffff;object-fit:contain;display:block;" />`;
       solEl.appendChild(imgEl);
     }
   }
@@ -3999,7 +4022,7 @@ function renderStudentProblemDisplay(containerId, problems, mode) {
 
   // Question content — image takes priority over text
   const questionContent = p.questionImage
-    ? `<img src="${p.questionImage}" style="width:100%;border-radius:8px;display:block;margin-bottom:12px;background:#ffffff;object-fit:contain;" alt="Question" />`
+    ? `<img class="problem-img" src="${p.questionImage}" style="width:100%;border-radius:8px;display:block;margin-bottom:12px;background:#ffffff;object-fit:contain;" alt="Question" />`
     : `<div class="question-text" style="font-size:15px;">${(p.question||'').replace(/\n/g,'<br>')}</div>`;
 
   el.innerHTML = `
@@ -4478,6 +4501,22 @@ function toggleDark() {
   DB.set('darkmode', document.body.classList.contains('dark'));
 }
 
+function setImageDisplayWidth(pct) {
+  document.documentElement.style.setProperty('--img-display-width', pct + '%');
+  const label = document.getElementById('img-width-label');
+  if (label) label.textContent = pct + '%';
+  DB.set('img_display_width', parseInt(pct));
+}
+
+function restoreImageDisplayWidth() {
+  // Default to 75% — fits comfortably in the problem display container
+  // User can adjust in Settings → Appearance
+  const saved = DB.get('img_display_width') ?? 75;
+  setImageDisplayWidth(saved);
+  const slider = document.getElementById('img-width-slider');
+  if (slider) slider.value = saved;
+}
+
 if (DB.get('darkmode')) {
   document.body.classList.add('dark');
 }
@@ -4862,6 +4901,7 @@ function syncDarkToggle() {
 // ══════════════════════════════════════════════════
 window.addEventListener('DOMContentLoaded', () => {
   syncDarkToggle();
+  restoreImageDisplayWidth();
   bootApp();
 });
 </script>
