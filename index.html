@@ -192,8 +192,8 @@ html, body { height: 100%; font-family: 'DM Sans', sans-serif; background: var(-
 .upload-zone.has-images:hover { background: var(--surface); border-color: var(--border); }
 /* Image strip */
 .upload-strip { display: flex; flex-direction: column; gap: 6px; }
-.upload-strip-item { position: relative; border-radius: 10px; background: #ffffff; border: 1px solid var(--border); }
-.upload-strip-item img { width: 100%; display: block; border-radius: 8px; object-fit: contain; background: #ffffff; }
+.upload-strip-item { position: relative; border-radius: 10px; background: #ffffff; border: 1px solid var(--border); overflow: hidden; }
+.upload-strip-item img { width: 100%; display: block; border-radius: 0; background: #ffffff; }
 .upload-strip-item-overlay { position: absolute; inset: 0; background: rgba(0,0,0,0); transition: background 0.15s; border-radius: 8px; display: flex; align-items: center; justify-content: center; gap: 6px; opacity: 0; }
 .upload-strip-item:hover .upload-strip-item-overlay { background: rgba(0,0,0,0.38); opacity: 1; }
 .strip-btn { background: rgba(255,255,255,0.93); border: none; border-radius: 5px; padding: 4px 9px; font-size: 11px; font-weight: 600; cursor: pointer; color: var(--text-primary); }
@@ -1973,6 +1973,7 @@ function renderUploadZone(type) {
         <div style="display:flex;gap:4px;margin-left:4px;">
           ${idx > 0 ? `<button class="strip-btn" onclick="moveUploadImage('${type}',${idx},-1)" style="border:1px solid var(--border);border-radius:4px;padding:2px 6px;">↑</button>` : ''}
           ${idx < images.length-1 ? `<button class="strip-btn" onclick="moveUploadImage('${type}',${idx},1)" style="border:1px solid var(--border);border-radius:4px;padding:2px 6px;">↓</button>` : ''}
+          <button id="${type}-wm-btn-${idx}" class="strip-btn" onclick="removeWatermark('${type}',${idx})" style="border:1px solid var(--amber);border-radius:4px;padding:2px 6px;color:var(--amber);" title="Remove watermark">✦ Watermark</button>
           <button class="strip-btn danger" onclick="removeUploadImage('${type}',${idx})" style="border:1px solid #FCA5A5;border-radius:4px;padding:2px 6px;">✕</button>
         </div>
       </div>
@@ -2020,10 +2021,59 @@ function scaleZoneImageTyped(type, idx, val) {
   if (strip) {
     const img = strip.querySelector('img');
     if (img) img.style.width = n + '%';
-    // Sync range slider
     const range = strip.querySelector('input[type=range]');
     if (range) range.value = n;
   }
+}
+
+// ── Watermark removal ──
+// Detects light-coloured semi-transparent overlay pixels (pink, red, grey watermarks)
+// and replaces them with white. Works on "examsnip" / "cam" style watermarks.
+function removeWatermark(type, idx) {
+  const arr = type === 'q' ? uploadQImages : uploadSImages;
+  if (!arr[idx]) return;
+  const btn = document.getElementById(type + '-wm-btn-' + idx);
+  if (btn) { btn.textContent = '⏳ Removing…'; btn.disabled = true; }
+
+  const img = new Image();
+  img.onload = () => {
+    const w = img.naturalWidth;
+    const h = img.naturalHeight;
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0);
+    const imageData = ctx.getImageData(0, 0, w, h);
+    const data = imageData.data;
+
+    let changed = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      const r = data[i], g = data[i+1], b = data[i+2];
+      // Detect watermark pixels: light/pastel colours that aren't pure white or dark text
+      // Pink/red watermarks: high red, lower green/blue, but not dark
+      // Grey watermarks: r ≈ g ≈ b, but not pure white, not dark
+      const brightness = (r + g + b) / 3;
+      const isPinkish = r > 180 && g < r - 30 && b < r - 10 && brightness > 150;
+      const isLightGrey = Math.abs(r-g) < 25 && Math.abs(g-b) < 25 && brightness > 160 && brightness < 230;
+      const isRedWash = r > 200 && g > 150 && b > 150 && r > g + 20 && brightness > 170;
+
+      if (isPinkish || isLightGrey || isRedWash) {
+        // Blend toward white based on how "watermark-like" the pixel is
+        const blend = Math.min(1, (brightness - 150) / 80);
+        data[i]   = Math.round(r + (255 - r) * blend);
+        data[i+1] = Math.round(g + (255 - g) * blend);
+        data[i+2] = Math.round(b + (255 - b) * blend);
+        changed++;
+      }
+    }
+
+    ctx.putImageData(imageData, 0, 0);
+    const newDataUrl = canvas.toDataURL('image/jpeg', 0.95);
+    arr[idx].dataUrl = newDataUrl;
+    renderUploadZone(type);
+    toast(`✓ Watermark removed (${changed.toLocaleString()} pixels cleaned)`);
+  };
+  img.src = arr[idx].dataUrl;
 }
 
 function moveUploadImage(type, idx, dir) {
