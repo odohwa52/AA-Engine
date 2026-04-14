@@ -184,7 +184,7 @@ html, body { height: 100%; font-family: 'DM Sans', sans-serif; background: var(-
 /* ── UPLOAD ── */
 .upload-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px; }
 /* Empty drop target */
-.upload-zone { border: 2px dashed var(--border-strong); border-radius: 12px; padding: 36px 24px; text-align: center; cursor: pointer; transition: border-color 0.15s, background 0.15s; background: var(--surface); position: relative; overflow: hidden; }
+.upload-zone { border: 2px dashed var(--border-strong); border-radius: 12px; padding: 36px 24px; text-align: center; cursor: pointer; transition: border-color 0.15s, background 0.15s; background: var(--surface); position: relative; }
 .upload-zone:hover, .upload-zone.drag-over { border-color: var(--accent); background: var(--accent-light); }
 .upload-zone input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
 /* Filled state */
@@ -192,7 +192,7 @@ html, body { height: 100%; font-family: 'DM Sans', sans-serif; background: var(-
 .upload-zone.has-images:hover { background: var(--surface); border-color: var(--border); }
 /* Image strip */
 .upload-strip { display: flex; flex-direction: column; gap: 6px; }
-.upload-strip-item { position: relative; border-radius: 8px; overflow: hidden; background: #ffffff; border: 1px solid var(--border); }
+.upload-strip-item { position: relative; border-radius: 10px; background: #ffffff; border: 1px solid var(--border); }
 .upload-strip-item img { width: 100%; display: block; border-radius: 8px; object-fit: contain; background: #ffffff; }
 .upload-strip-item-overlay { position: absolute; inset: 0; background: rgba(0,0,0,0); transition: background 0.15s; border-radius: 8px; display: flex; align-items: center; justify-content: center; gap: 6px; opacity: 0; }
 .upload-strip-item:hover .upload-strip-item-overlay { background: rgba(0,0,0,0.38); opacity: 1; }
@@ -694,14 +694,13 @@ body.dark .processing-overlay { background: rgba(26,29,46,0.9); }
                   <option value="5">Topic 5 — Calculus</option>
                 </select>
               </div>
-              <div>
+              <div style="position:relative;">
                 <label class="form-label">Subtopic(s)</label>
                 <div id="subtopic-tag-box" style="min-height:38px;border:1px solid var(--border);border-radius:8px;background:var(--surface);padding:4px 8px;display:flex;flex-wrap:wrap;gap:4px;align-items:center;cursor:text;transition:border-color 0.15s;" onclick="document.getElementById('subtopic-tag-input').focus()">
                   <div id="subtopic-chips" style="display:contents;"></div>
-                  <input id="subtopic-tag-input" placeholder="Click to browse, or type to search…" style="border:none;outline:none;background:transparent;font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text-primary);flex:1;min-width:120px;padding:2px 0;" onkeydown="handleSubtopicKey(event)" oninput="showSubtopicSuggestions()" onfocus="onSubtopicFocus()" onblur="document.getElementById('subtopic-tag-box').style.borderColor='var(--border)';setTimeout(hideSubtopicSuggestions,150)" />
+                  <input id="subtopic-tag-input" placeholder="Click to browse all, or type to search…" style="border:none;outline:none;background:transparent;font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text-primary);flex:1;min-width:120px;padding:2px 0;" onkeydown="handleSubtopicKey(event)" oninput="showSubtopicSuggestions()" onfocus="onSubtopicFocus()" onblur="document.getElementById('subtopic-tag-box').style.borderColor='var(--border)';setTimeout(hideSubtopicSuggestions,150)" />
                 </div>
-                <div id="subtopic-suggestions" style="display:none;position:absolute;z-index:50;background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.1);max-height:280px;overflow-y:auto;margin-top:2px;min-width:260px;"></div>
-                <!-- Hidden field for form submission compatibility -->
+                <div id="subtopic-suggestions" style="display:none;position:absolute;left:0;right:0;z-index:200;background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,0.15);max-height:320px;overflow-y:auto;margin-top:2px;"></div>
                 <input type="hidden" id="up-subtopic" value="" />
               </div>
               <div>
@@ -2064,13 +2063,24 @@ function renderUploadZone(type) {
   const stripItems = images.map((entry, idx) => {
     const scale = entry.scale ?? 100;
     return `
-    <div class="upload-strip-item" id="${type}-strip-${idx}">
-      <img src="${entry.dataUrl}" alt="page ${idx+1}" style="width:${scale}%;max-width:100%;" />
-      <div style="position:absolute;top:4px;left:4px;background:rgba(0,0,0,0.55);color:#fff;font-size:10px;font-weight:600;padding:2px 6px;border-radius:4px;">${scale}%</div>
-      <div class="upload-strip-item-overlay">
-        ${idx > 0 ? `<button class="strip-btn" onclick="moveUploadImage('${type}',${idx},-1)">↑ Move up</button>` : ''}
-        ${idx < images.length-1 ? `<button class="strip-btn" onclick="moveUploadImage('${type}',${idx},1)">↓ Move down</button>` : ''}
-        <button class="strip-btn danger" onclick="removeUploadImage('${type}',${idx})">✕ Remove</button>
+    <div class="upload-strip-item" id="${type}-strip-${idx}" style="border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:2px;">
+      <img src="${entry.dataUrl}" alt="page ${idx+1}" style="width:${scale}%;max-width:100%;display:block;background:#ffffff;" />
+      <!-- Inline scale controls -->
+      <div style="padding:8px 10px;background:var(--bg);border-top:1px solid var(--border);display:flex;align-items:center;gap:8px;">
+        <span style="font-size:11px;color:var(--text-secondary);white-space:nowrap;">Scale:</span>
+        <input type="range" min="20" max="100" value="${scale}"
+          style="flex:1;accent-color:var(--accent);"
+          oninput="scaleZoneImage('${type}',${idx},this.value,this)" />
+        <input type="number" min="20" max="100" value="${scale}"
+          id="${type}-scale-num-${idx}"
+          style="width:48px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-weight:600;text-align:center;background:var(--surface);color:var(--text-primary);"
+          oninput="scaleZoneImageTyped('${type}',${idx},this.value)" />
+        <span style="font-size:11px;color:var(--text-secondary);">%</span>
+        <div style="display:flex;gap:4px;margin-left:4px;">
+          ${idx > 0 ? `<button class="strip-btn" onclick="moveUploadImage('${type}',${idx},-1)" style="border:1px solid var(--border);border-radius:4px;padding:2px 6px;">↑</button>` : ''}
+          ${idx < images.length-1 ? `<button class="strip-btn" onclick="moveUploadImage('${type}',${idx},1)" style="border:1px solid var(--border);border-radius:4px;padding:2px 6px;">↓</button>` : ''}
+          <button class="strip-btn danger" onclick="removeUploadImage('${type}',${idx})" style="border:1px solid #FCA5A5;border-radius:4px;padding:2px 6px;">✕</button>
+        </div>
       </div>
     </div>`;
   }).join('');
@@ -2089,6 +2099,37 @@ function renderUploadZone(type) {
 
   // Trigger AI detection on first question upload
   if (type === 'q' && images.length === 1) simulateAIDetection();
+}
+
+function scaleZoneImage(type, idx, val, rangeEl) {
+  val = Math.max(20, Math.min(100, parseInt(val) || 100));
+  const arr = type === 'q' ? uploadQImages : uploadSImages;
+  if (!arr[idx]) return;
+  arr[idx].scale = val;
+  // Update img width live
+  const strip = document.getElementById(type + '-strip-' + idx);
+  if (strip) {
+    const img = strip.querySelector('img');
+    if (img) img.style.width = val + '%';
+    const numInput = document.getElementById(type + '-scale-num-' + idx);
+    if (numInput) numInput.value = val;
+  }
+}
+
+function scaleZoneImageTyped(type, idx, val) {
+  const n = parseInt(val);
+  if (isNaN(n) || n < 20 || n > 100) return;
+  const arr = type === 'q' ? uploadQImages : uploadSImages;
+  if (!arr[idx]) return;
+  arr[idx].scale = n;
+  const strip = document.getElementById(type + '-strip-' + idx);
+  if (strip) {
+    const img = strip.querySelector('img');
+    if (img) img.style.width = n + '%';
+    // Sync range slider
+    const range = strip.querySelector('input[type=range]');
+    if (range) range.value = n;
+  }
 }
 
 function moveUploadImage(type, idx, dir) {
@@ -2265,7 +2306,7 @@ function showSubtopicSuggestions() {
 
   // Group by topic number for clarity
   const grouped = {};
-  matches.slice(0, 20).forEach(s => {
+  matches.slice(0, 60).forEach(s => {
     if (!grouped[s.topic]) grouped[s.topic] = [];
     grouped[s.topic].push(s.label);
   });
