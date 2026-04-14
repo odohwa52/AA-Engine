@@ -1215,40 +1215,76 @@ body.dark .processing-overlay { background: rgba(26,29,46,0.9); }
 
 <!-- IMAGE PREVIEW MODAL -->
 <div class="modal-overlay" id="img-preview-modal" onclick="closeModalOutside(event,'img-preview-modal')">
-  <div class="modal" style="width:740px;max-width:96vw;padding:20px;">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-      <div class="modal-title" style="margin-bottom:0;" id="ipm-title">Image Preview</div>
-      <button class="icon-btn" onclick="closeModal('img-preview-modal')">
-        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><line x1="2" y1="2" x2="14" y2="14"/><line x1="14" y1="2" x2="2" y2="14"/></svg>
-      </button>
-    </div>
-    <div style="font-size:12px;color:var(--text-secondary);margin-bottom:14px;" id="ipm-hint"></div>
-
-    <!-- Scale controls — apply to all pages or individual page -->
-    <div style="background:var(--accent-light);border:1px solid var(--accent);border-radius:10px;padding:14px 16px;margin-bottom:16px;">
-      <div style="font-size:12px;font-weight:600;color:var(--accent);margin-bottom:10px;">Scale images</div>
-      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-        <input type="range" id="ipm-scale-slider" min="20" max="100" value="100"
-          style="flex:1;min-width:160px;accent-color:var(--accent);"
-          oninput="ipmScaleChanged(this.value)" />
-        <div style="display:flex;align-items:center;gap:6px;">
-          <input type="number" id="ipm-scale-input" min="20" max="100" value="100"
-            style="width:64px;padding:5px 8px;border:1px solid var(--border);border-radius:7px;font-size:13px;font-weight:600;background:var(--surface);color:var(--text-primary);text-align:center;"
-            oninput="ipmScaleTyped(this.value)" onblur="ipmScaleBlur(this)" />
-          <span style="font-size:13px;color:var(--accent);font-weight:600;">%</span>
+  <div class="modal" style="width:92vw;max-width:1100px;padding:0;overflow:hidden;border-radius:14px;">
+    <!-- Header -->
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--border);background:var(--surface);">
+      <div style="display:flex;align-items:center;gap:14px;">
+        <div class="modal-title" style="margin-bottom:0;" id="ipm-title">Edit Photos</div>
+        <div style="display:flex;gap:6px;align-items:center;">
+          <button class="btn btn-ghost btn-sm" id="ipm-prev-btn" onclick="ipmNavPage(-1)">← Prev</button>
+          <span id="ipm-page-label" style="font-size:13px;color:var(--text-secondary);white-space:nowrap;"></span>
+          <button class="btn btn-ghost btn-sm" id="ipm-next-btn" onclick="ipmNavPage(1)">Next →</button>
         </div>
-        <button class="btn btn-ghost btn-sm" onclick="ipmApplyToAll()" style="white-space:nowrap;">Apply to all pages</button>
       </div>
-      <div style="font-size:11.5px;color:var(--text-secondary);margin-top:8px;">Drag slider or type a number. Each page can have its own scale — or use Apply to all.</div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button class="btn btn-ghost btn-sm" onclick="document.getElementById('ipm-add-input').click()">+ Add page</button>
+        <input type="file" id="ipm-add-input" accept="image/*" multiple style="display:none;" onchange="ipmAddPages(this)" />
+        <button class="btn btn-primary btn-sm" onclick="closeModal('img-preview-modal')">Done</button>
+        <button class="icon-btn" onclick="closeModal('img-preview-modal')">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><line x1="2" y1="2" x2="14" y2="14"/><line x1="14" y1="2" x2="2" y2="14"/></svg>
+        </button>
+      </div>
     </div>
 
-    <!-- Pages strip -->
-    <div id="ipm-strip" style="display:flex;flex-direction:column;gap:16px;max-height:55vh;overflow-y:auto;padding-right:4px;"></div>
-    <div style="display:flex;gap:10px;margin-top:16px;align-items:center;">
-      <button class="btn btn-ghost btn-sm" onclick="document.getElementById('ipm-add-input').click()">+ Add page</button>
-      <input type="file" id="ipm-add-input" accept="image/*" multiple style="display:none;" onchange="ipmAddPages(this)" />
-      <span style="font-size:12px;color:var(--text-secondary);" id="ipm-page-count"></span>
-      <button class="btn btn-primary btn-sm" style="margin-left:auto;" onclick="closeModal('img-preview-modal')">Done</button>
+    <!-- Two-panel body -->
+    <div style="display:grid;grid-template-columns:1fr 340px;height:75vh;overflow:hidden;">
+
+      <!-- LEFT: single page editor -->
+      <div style="display:flex;flex-direction:column;border-right:1px solid var(--border);overflow:hidden;">
+        <!-- Controls bar -->
+        <div style="padding:10px 16px;background:var(--bg);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap;flex-shrink:0;">
+          <span style="font-size:11.5px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.4px;">Scale:</span>
+          <input type="range" id="ipm-page-scale-slider" min="10" max="100" value="100"
+            style="flex:1;min-width:100px;accent-color:var(--accent);"
+            oninput="ipmPageScaleChanged(this.value)" />
+          <input type="number" id="ipm-page-scale-num" min="10" max="100" value="100"
+            style="width:52px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-weight:600;text-align:center;background:var(--surface);color:var(--text-primary);"
+            oninput="ipmPageScaleTyped(this.value)" />
+          <span style="font-size:12px;color:var(--text-secondary);">%</span>
+          <div style="width:1px;height:20px;background:var(--border);"></div>
+          <span style="font-size:11.5px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.4px;">Crop:</span>
+          <button class="btn btn-ghost btn-xs" id="ipm-crop-toggle" onclick="ipmToggleCrop()">✂ Enable crop</button>
+          <button class="btn btn-primary btn-xs" id="ipm-crop-apply" style="display:none;" onclick="ipmApplyCrop()">Apply crop</button>
+          <button class="btn btn-ghost btn-xs" id="ipm-crop-cancel" style="display:none;" onclick="ipmCancelCrop()">Cancel</button>
+          <div style="margin-left:auto;display:flex;gap:6px;">
+            ${''/* move buttons handled per-page */}
+            <button class="btn btn-ghost btn-xs" id="ipm-move-up" onclick="ipmMoveCurrentPage(-1)">↑ Move up</button>
+            <button class="btn btn-ghost btn-xs" id="ipm-move-down" onclick="ipmMoveCurrentPage(1)">↓ Move down</button>
+            <button class="strip-btn danger" style="border:1px solid #FCA5A5;border-radius:5px;padding:3px 8px;font-size:11px;" onclick="ipmRemoveCurrentPage()">✕ Remove page</button>
+          </div>
+        </div>
+        <!-- Image canvas area -->
+        <div id="ipm-editor-area" style="flex:1;overflow:auto;background:#e8e8e8;display:flex;align-items:flex-start;justify-content:center;padding:16px;position:relative;">
+          <div id="ipm-crop-wrapper" style="position:relative;display:inline-block;user-select:none;">
+            <img id="ipm-editor-img" style="display:block;max-width:100%;background:#ffffff;" />
+            <!-- Crop overlay — shown when crop mode active -->
+            <div id="ipm-crop-overlay" style="display:none;position:absolute;inset:0;cursor:crosshair;">
+              <div id="ipm-crop-rect" style="position:absolute;border:2px solid var(--accent);background:rgba(37,99,235,0.08);pointer-events:none;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT: combined stacked preview -->
+      <div style="display:flex;flex-direction:column;overflow:hidden;background:var(--bg);">
+        <div style="padding:10px 14px;border-bottom:1px solid var(--border);background:var(--surface);flex-shrink:0;">
+          <div style="font-size:11.5px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.4px;">Combined preview</div>
+          <div style="font-size:11px;color:var(--text-secondary);margin-top:2px;" id="ipm-preview-hint">All pages stacked as students will see them</div>
+        </div>
+        <div id="ipm-combined-preview" style="flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:0;background:#e8e8e8;">
+          <!-- Pages render here as stacked divs -->
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -4818,179 +4854,268 @@ function getUploadMarks() {
 // ══════════════════════════════════════════════════
 // IMAGE PREVIEW MODAL
 // ══════════════════════════════════════════════════
+// ══════════════════════════════════════════════════
+// IMAGE EDITOR MODAL — two-panel: edit left, combined preview right
+// ══════════════════════════════════════════════════
 let ipmCurrentType = null;
-
-// ── Image Preview & Scale Editor ──
-// Each image entry can have an optional .scale (20–100, default 100)
-// Scale is stored on the entry and used as CSS width% when displaying
+let ipmCurrentPage = 0;    // which page is open in the left editor
+let ipmCropMode = false;   // is crop tool active
+let ipmCropStart = null;   // {x,y} in image-natural coords
+let ipmCropEnd = null;
+let ipmCropDragging = false;
 
 function openImagePreview(type) {
   ipmCurrentType = type;
+  ipmCurrentPage = 0;
+  ipmCropMode = false;
   const images = type === 'q' ? uploadQImages : uploadSImages;
   const label = type === 'q' ? 'Question' : 'Solution';
-  document.getElementById('ipm-title').textContent = `${label} Photos — Scale & Edit`;
-  document.getElementById('ipm-hint').textContent =
-    `${images.length} page${images.length!==1?'s':''} · Adjust scale per page or apply to all. Changes are live.`;
-
-  // Set slider/input to first image's scale, or 100
-  const firstScale = images[0]?.scale ?? 100;
-  document.getElementById('ipm-scale-slider').value = firstScale;
-  document.getElementById('ipm-scale-input').value = firstScale;
-
-  renderIpmStrip();
+  document.getElementById('ipm-title').textContent = `${label} Photos — Edit & Preview`;
+  renderIpmEditor();
+  renderIpmCombinedPreview();
   openModal('img-preview-modal');
 }
 
-let ipmFocusedPage = null; // which page index the scale control currently targets
-
-function renderIpmStrip() {
-  const type = ipmCurrentType;
-  const images = type === 'q' ? uploadQImages : uploadSImages;
-  const strip = document.getElementById('ipm-strip');
-  const count = document.getElementById('ipm-page-count');
-  count.textContent = images.length + ' page' + (images.length!==1?'s':'') + ' total';
-
-  strip.innerHTML = images.map((entry, idx) => {
-    const scale = entry.scale ?? 100;
-    return `
-    <div style="border:1px solid var(--border);border-radius:10px;overflow:hidden;" id="ipm-card-${idx}">
-      <!-- Card header -->
-      <div style="background:var(--bg);padding:7px 12px;font-size:11px;font-weight:600;color:var(--text-secondary);display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);">
-        <span>Page ${idx+1}${idx===0?' (first)':idx===images.length-1?' (last)':''}</span>
-        <div style="display:flex;gap:6px;align-items:center;">
-          ${idx > 0 ? `<button class="strip-btn" style="border:1px solid var(--border);border-radius:4px;padding:2px 7px;" onclick="ipmMove(${idx},-1)">↑ Up</button>` : ''}
-          ${idx < images.length-1 ? `<button class="strip-btn" style="border:1px solid var(--border);border-radius:4px;padding:2px 7px;" onclick="ipmMove(${idx},1)">↓ Down</button>` : ''}
-          <button class="strip-btn danger" style="border:1px solid #FCA5A5;border-radius:4px;padding:2px 7px;" onclick="ipmRemove(${idx})">✕ Remove</button>
-        </div>
-      </div>
-      <!-- Per-page scale row -->
-      <div style="padding:8px 12px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;" onclick="ipmSelectPage(${idx})">
-        <span style="font-size:11.5px;color:var(--text-secondary);min-width:56px;">This page:</span>
-        <input type="range" min="20" max="100" value="${scale}"
-          style="flex:1;accent-color:var(--accent);"
-          oninput="ipmScalePage(${idx}, this.value)" />
-        <input type="number" min="20" max="100" value="${scale}"
-          id="ipm-page-input-${idx}"
-          style="width:52px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-weight:600;text-align:center;background:var(--surface);color:var(--text-primary);"
-          oninput="ipmScalePageTyped(${idx}, this.value)"
-          onblur="ipmScalePageBlur(${idx}, this)" />
-        <span style="font-size:12px;color:var(--text-secondary);">%</span>
-        <span style="font-size:11px;color:var(--text-secondary);min-width:70px;">${Math.round(680 * scale / 100)}px wide</span>
-      </div>
-      <!-- Image preview at live scale -->
-      <div style="padding:12px;background:#ffffff;text-align:left;">
-        <img src="${entry.dataUrl}" id="ipm-img-${idx}"
-          style="width:${scale}%;max-width:100%;height:auto;object-fit:contain;background:#ffffff;border-radius:6px;display:block;transition:width 0.1s;" />
-      </div>
-    </div>`;
-  }).join('');
-}
-
-function ipmSelectPage(idx) {
-  ipmFocusedPage = idx;
+function renderIpmEditor() {
   const images = ipmCurrentType === 'q' ? uploadQImages : uploadSImages;
-  const scale = images[idx]?.scale ?? 100;
-  document.getElementById('ipm-scale-slider').value = scale;
-  document.getElementById('ipm-scale-input').value = scale;
-}
+  const idx = ipmCurrentPage;
+  const entry = images[idx];
 
-// Global scale controls (top slider/input) — apply to currently focused page, or page 0
-function ipmScaleChanged(val) {
-  val = Math.max(20, Math.min(100, parseInt(val) || 100));
-  document.getElementById('ipm-scale-input').value = val;
-  const target = ipmFocusedPage ?? 0;
-  ipmScalePage(target, val);
-}
+  // Page nav label
+  const lbl = document.getElementById('ipm-page-label');
+  if (lbl) lbl.textContent = `Page ${idx+1} of ${images.length}`;
 
-function ipmScaleTyped(val) {
-  const n = parseInt(val);
-  if (isNaN(n) || n < 20 || n > 100) return;
-  document.getElementById('ipm-scale-slider').value = n;
-  const target = ipmFocusedPage ?? 0;
-  ipmScalePage(target, n);
-}
+  // Nav button states
+  const prev = document.getElementById('ipm-prev-btn');
+  const next = document.getElementById('ipm-next-btn');
+  if (prev) prev.disabled = idx === 0;
+  if (next) next.disabled = idx === images.length - 1;
 
-function ipmScaleBlur(input) {
-  let n = parseInt(input.value);
-  if (isNaN(n)) n = 100;
-  n = Math.max(20, Math.min(100, n));
-  input.value = n;
-  ipmScaleTyped(n);
-}
+  // Move buttons
+  const up = document.getElementById('ipm-move-up');
+  const down = document.getElementById('ipm-move-down');
+  if (up) up.disabled = idx === 0;
+  if (down) down.disabled = idx === images.length - 1;
 
-// Per-page scale update
-function ipmScalePage(idx, val) {
-  val = Math.max(20, Math.min(100, parseInt(val) || 100));
-  const images = ipmCurrentType === 'q' ? uploadQImages : uploadSImages;
-  if (!images[idx]) return;
-  images[idx].scale = val;
+  if (!entry) return;
+  const scale = entry.scale ?? 100;
 
-  // Update live without full re-render
-  const img = document.getElementById('ipm-img-' + idx);
-  if (img) img.style.width = val + '%';
+  // Update scale slider/input
+  const slider = document.getElementById('ipm-page-scale-slider');
+  const num = document.getElementById('ipm-page-scale-num');
+  if (slider) slider.value = scale;
+  if (num) num.value = scale;
 
-  const pageInput = document.getElementById('ipm-page-input-' + idx);
-  if (pageInput) pageInput.value = val;
-
-  // Update px label
-  const card = document.getElementById('ipm-card-' + idx);
-  if (card) {
-    const px = card.querySelector('span[style*="min-width:70px"]');
-    if (px) px.textContent = Math.round(680 * val / 100) + 'px wide';
+  // Update image
+  const img = document.getElementById('ipm-editor-img');
+  if (img) {
+    img.src = entry.dataUrl;
+    img.style.width = scale + '%';
   }
 
-  // Sync page range slider
-  const pageRange = card?.querySelectorAll('input[type=range]')[0];
-  if (pageRange) pageRange.value = val;
-
-  // Keep upload zone preview in sync
-  renderUploadZone(ipmCurrentType);
+  // Reset crop mode UI
+  ipmCancelCrop();
 }
 
-function ipmScalePageTyped(idx, val) {
-  const n = parseInt(val);
-  if (isNaN(n) || n < 20 || n > 100) return;
-  ipmScalePage(idx, n);
-}
-
-function ipmScalePageBlur(idx, input) {
-  let n = parseInt(input.value);
-  if (isNaN(n)) n = 100;
-  n = Math.max(20, Math.min(100, n));
-  input.value = n;
-  ipmScalePage(idx, n);
-}
-
-function ipmApplyToAll() {
-  const val = parseInt(document.getElementById('ipm-scale-input').value) || 100;
+function ipmNavPage(dir) {
   const images = ipmCurrentType === 'q' ? uploadQImages : uploadSImages;
-  images.forEach((entry, idx) => {
-    entry.scale = val;
+  ipmCurrentPage = Math.max(0, Math.min(images.length - 1, ipmCurrentPage + dir));
+  ipmCropMode = false;
+  renderIpmEditor();
+}
+
+function ipmPageScaleChanged(val) {
+  val = Math.max(10, Math.min(100, parseInt(val) || 100));
+  const num = document.getElementById('ipm-page-scale-num');
+  if (num) num.value = val;
+  const images = ipmCurrentType === 'q' ? uploadQImages : uploadSImages;
+  const entry = images[ipmCurrentPage];
+  if (entry) entry.scale = val;
+  const img = document.getElementById('ipm-editor-img');
+  if (img) img.style.width = val + '%';
+  renderIpmCombinedPreview();
+  renderUploadZone(ipmCurrentType);
+}
+
+function ipmPageScaleTyped(val) {
+  const n = parseInt(val);
+  if (isNaN(n) || n < 10 || n > 100) return;
+  const slider = document.getElementById('ipm-page-scale-slider');
+  if (slider) slider.value = n;
+  ipmPageScaleChanged(n);
+}
+
+// ── Crop tool ──
+function ipmToggleCrop() {
+  ipmCropMode = !ipmCropMode;
+  const overlay = document.getElementById('ipm-crop-overlay');
+  const btn = document.getElementById('ipm-crop-toggle');
+  const applyBtn = document.getElementById('ipm-crop-apply');
+  const cancelBtn = document.getElementById('ipm-crop-cancel');
+  if (ipmCropMode) {
+    if (overlay) overlay.style.display = 'block';
+    if (btn) btn.textContent = '✂ Cropping…';
+    if (applyBtn) applyBtn.style.display = '';
+    if (cancelBtn) cancelBtn.style.display = '';
+    ipmBindCropEvents();
+    toast('Draw a rectangle on the image to crop');
+  } else {
+    ipmCancelCrop();
+  }
+}
+
+function ipmCancelCrop() {
+  ipmCropMode = false;
+  ipmCropStart = null; ipmCropEnd = null; ipmCropDragging = false;
+  const overlay = document.getElementById('ipm-crop-overlay');
+  const rect = document.getElementById('ipm-crop-rect');
+  const btn = document.getElementById('ipm-crop-toggle');
+  const applyBtn = document.getElementById('ipm-crop-apply');
+  const cancelBtn = document.getElementById('ipm-crop-cancel');
+  if (overlay) overlay.style.display = 'none';
+  if (rect) rect.style.cssText = 'position:absolute;border:2px solid var(--accent);background:rgba(37,99,235,0.08);pointer-events:none;display:none;';
+  if (btn) btn.textContent = '✂ Enable crop';
+  if (applyBtn) applyBtn.style.display = 'none';
+  if (cancelBtn) cancelBtn.style.display = 'none';
+}
+
+function ipmBindCropEvents() {
+  const overlay = document.getElementById('ipm-crop-overlay');
+  if (!overlay || overlay._cropBound) return;
+  overlay._cropBound = true;
+
+  overlay.addEventListener('mousedown', e => {
+    if (!ipmCropMode) return;
+    ipmCropDragging = true;
+    const r = overlay.getBoundingClientRect();
+    ipmCropStart = { x: e.clientX - r.left, y: e.clientY - r.top };
+    ipmCropEnd = { ...ipmCropStart };
+    ipmDrawCropRect();
   });
-  renderIpmStrip();
-  renderUploadZone(ipmCurrentType);
-  toast(`✓ Scale set to ${val}% for all ${images.length} page${images.length!==1?'s':''}`);
+
+  overlay.addEventListener('mousemove', e => {
+    if (!ipmCropDragging) return;
+    const r = overlay.getBoundingClientRect();
+    ipmCropEnd = {
+      x: Math.max(0, Math.min(r.width, e.clientX - r.left)),
+      y: Math.max(0, Math.min(r.height, e.clientY - r.top))
+    };
+    ipmDrawCropRect();
+  });
+
+  overlay.addEventListener('mouseup', () => { ipmCropDragging = false; });
 }
 
-function ipmMove(idx, dir) {
-  const arr = ipmCurrentType === 'q' ? uploadQImages : uploadSImages;
-  const newIdx = idx + dir;
-  if (newIdx < 0 || newIdx >= arr.length) return;
-  [arr[idx], arr[newIdx]] = [arr[newIdx], arr[idx]];
-  renderIpmStrip();
+function ipmDrawCropRect() {
+  const rect = document.getElementById('ipm-crop-rect');
+  if (!rect || !ipmCropStart || !ipmCropEnd) return;
+  const x = Math.min(ipmCropStart.x, ipmCropEnd.x);
+  const y = Math.min(ipmCropStart.y, ipmCropEnd.y);
+  const w = Math.abs(ipmCropEnd.x - ipmCropStart.x);
+  const h = Math.abs(ipmCropEnd.y - ipmCropStart.y);
+  rect.style.cssText = `position:absolute;border:2px solid var(--accent);background:rgba(37,99,235,0.08);pointer-events:none;left:${x}px;top:${y}px;width:${w}px;height:${h}px;display:block;`;
+}
+
+function ipmApplyCrop() {
+  if (!ipmCropStart || !ipmCropEnd) { toast('⚠ Draw a crop rectangle first'); return; }
+  const img = document.getElementById('ipm-editor-img');
+  const overlay = document.getElementById('ipm-crop-overlay');
+  if (!img || !overlay) return;
+
+  // Convert display coords to natural image coords
+  const displayW = img.clientWidth;
+  const displayH = img.clientHeight;
+  const natW = img.naturalWidth;
+  const natH = img.naturalHeight;
+  const scaleX = natW / displayW;
+  const scaleY = natH / displayH;
+
+  const cx = Math.round(Math.min(ipmCropStart.x, ipmCropEnd.x) * scaleX);
+  const cy = Math.round(Math.min(ipmCropStart.y, ipmCropEnd.y) * scaleY);
+  const cw = Math.round(Math.abs(ipmCropEnd.x - ipmCropStart.x) * scaleX);
+  const ch = Math.round(Math.abs(ipmCropEnd.y - ipmCropStart.y) * scaleY);
+
+  if (cw < 10 || ch < 10) { toast('⚠ Crop area too small'); return; }
+
+  const canvas = document.createElement('canvas');
+  canvas.width = cw; canvas.height = ch;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, cw, ch);
+  ctx.drawImage(img, cx, cy, cw, ch, 0, 0, cw, ch);
+
+  const images = ipmCurrentType === 'q' ? uploadQImages : uploadSImages;
+  images[ipmCurrentPage].dataUrl = canvas.toDataURL('image/png');
+  ipmCancelCrop();
+  renderIpmEditor();
+  renderIpmCombinedPreview();
+  renderUploadZone(ipmCurrentType);
+  toast('✓ Crop applied');
+}
+
+// ── Combined preview ──
+function renderIpmCombinedPreview() {
+  const images = ipmCurrentType === 'q' ? uploadQImages : uploadSImages;
+  const container = document.getElementById('ipm-combined-preview');
+  if (!container) return;
+
+  container.innerHTML = images.map((entry, idx) => {
+    const scale = entry.scale ?? 100;
+    const isActive = idx === ipmCurrentPage;
+    return `<div style="margin-bottom:0;outline:${isActive?'2px solid var(--accent)':'none'};outline-offset:-1px;cursor:pointer;" onclick="ipmJumpToPage(${idx})" title="Click to edit page ${idx+1}">
+      <img src="${entry.dataUrl}" style="width:${scale}%;max-width:100%;display:block;background:#ffffff;" />
+    </div>`;
+  }).join('');
+
+  const hint = document.getElementById('ipm-preview-hint');
+  if (hint) hint.textContent = `${images.length} page${images.length!==1?'s':''} · Click a page to edit it · Blue outline = current page`;
+}
+
+function ipmJumpToPage(idx) {
+  ipmCurrentPage = idx;
+  ipmCropMode = false;
+  renderIpmEditor();
+  // Scroll preview to show active page
+  const container = document.getElementById('ipm-combined-preview');
+  if (container) {
+    const children = container.children;
+    if (children[idx]) children[idx].scrollIntoView({ block: 'nearest' });
+  }
+}
+
+function ipmMoveCurrentPage(dir) {
+  const images = ipmCurrentType === 'q' ? uploadQImages : uploadSImages;
+  const newIdx = ipmCurrentPage + dir;
+  if (newIdx < 0 || newIdx >= images.length) return;
+  [images[ipmCurrentPage], images[newIdx]] = [images[newIdx], images[ipmCurrentPage]];
+  ipmCurrentPage = newIdx;
+  renderIpmEditor();
+  renderIpmCombinedPreview();
   renderUploadZone(ipmCurrentType);
 }
 
-function ipmRemove(idx) {
-  if (ipmCurrentType === 'q') uploadQImages.splice(idx, 1);
-  else uploadSImages.splice(idx, 1);
-  if ((ipmCurrentType === 'q' ? uploadQImages : uploadSImages).length === 0) {
+function ipmRemoveCurrentPage() {
+  const images = ipmCurrentType === 'q' ? uploadQImages : uploadSImages;
+  if (images.length === 1) {
     closeModal('img-preview-modal');
+    images.splice(0, 1);
     renderUploadZone(ipmCurrentType);
     return;
   }
-  renderIpmStrip();
+  images.splice(ipmCurrentPage, 1);
+  ipmCurrentPage = Math.min(ipmCurrentPage, images.length - 1);
+  renderIpmEditor();
+  renderIpmCombinedPreview();
   renderUploadZone(ipmCurrentType);
+}
+
+function ipmApplyToAll() {
+  const val = parseInt(document.getElementById('ipm-page-scale-num').value) || 100;
+  const images = ipmCurrentType === 'q' ? uploadQImages : uploadSImages;
+  images.forEach(e => { e.scale = val; });
+  renderIpmCombinedPreview();
+  renderUploadZone(ipmCurrentType);
+  toast(`✓ Scale set to ${val}% for all ${images.length} page${images.length!==1?'s':''}`);
 }
 
 async function ipmAddPages(input) {
@@ -5000,8 +5125,10 @@ async function ipmAddPages(input) {
   if (ipmCurrentType === 'q') uploadQImages.push(...entries);
   else uploadSImages.push(...entries);
   input.value = '';
-  renderIpmStrip();
+  renderIpmCombinedPreview();
   renderUploadZone(ipmCurrentType);
+  document.getElementById('ipm-page-label').textContent =
+    `Page ${ipmCurrentPage+1} of ${(ipmCurrentType==='q'?uploadQImages:uploadSImages).length}`;
 }
 
 
