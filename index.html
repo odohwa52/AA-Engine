@@ -2027,8 +2027,9 @@ function scaleZoneImageTyped(type, idx, val) {
 }
 
 // ── Watermark removal ──
-// Detects light-coloured semi-transparent overlay pixels (pink, red, grey watermarks)
-// and replaces them with white. Works on "examsnip" / "cam" style watermarks.
+// Detects the subtle pink/red tint used by Cambridge/exam watermarks
+// Signature: very light pixels (brightness > 200) where red channel
+// is slightly higher than green/blue (r - g between 5 and 40)
 function removeWatermark(type, idx) {
   const arr = type === 'q' ? uploadQImages : uploadSImages;
   if (!arr[idx]) return;
@@ -2049,29 +2050,37 @@ function removeWatermark(type, idx) {
     let changed = 0;
     for (let i = 0; i < data.length; i += 4) {
       const r = data[i], g = data[i+1], b = data[i+2];
-      // Detect watermark pixels: light/pastel colours that aren't pure white or dark text
-      // Pink/red watermarks: high red, lower green/blue, but not dark
-      // Grey watermarks: r ≈ g ≈ b, but not pure white, not dark
       const brightness = (r + g + b) / 3;
-      const isPinkish = r > 180 && g < r - 30 && b < r - 10 && brightness > 150;
-      const isLightGrey = Math.abs(r-g) < 25 && Math.abs(g-b) < 25 && brightness > 160 && brightness < 230;
-      const isRedWash = r > 200 && g > 150 && b > 150 && r > g + 20 && brightness > 170;
+      const rg = r - g; // how much redder than green
+      const rb = r - b; // how much redder than blue
 
-      if (isPinkish || isLightGrey || isRedWash) {
-        // Blend toward white based on how "watermark-like" the pixel is
-        const blend = Math.min(1, (brightness - 150) / 80);
-        data[i]   = Math.round(r + (255 - r) * blend);
-        data[i+1] = Math.round(g + (255 - g) * blend);
-        data[i+2] = Math.round(b + (255 - b) * blend);
+      // Watermark pixels: very light, subtly pink/red tinted
+      // brightness > 200 (near-white), red slightly above green and blue
+      // rg between 5-40, rb between 3-35 (subtle tint, not full red)
+      const isWatermark = brightness > 200
+        && rg >= 5 && rg <= 40
+        && rb >= 3 && rb <= 35
+        && r > 180; // definitely light
+
+      if (isWatermark) {
+        // Push toward pure white proportionally to how strong the tint is
+        const strength = Math.min(1, rg / 15);
+        data[i]   = Math.min(255, Math.round(r + (255 - r) * strength * 0.9));
+        data[i+1] = Math.min(255, Math.round(g + (255 - g) * strength * 1.2));
+        data[i+2] = Math.min(255, Math.round(b + (255 - b) * strength * 1.1));
         changed++;
       }
     }
 
     ctx.putImageData(imageData, 0, 0);
-    const newDataUrl = canvas.toDataURL('image/jpeg', 0.95);
-    arr[idx].dataUrl = newDataUrl;
+    arr[idx].dataUrl = canvas.toDataURL('image/png'); // PNG to avoid JPEG re-compression artefacts
     renderUploadZone(type);
-    toast(`✓ Watermark removed (${changed.toLocaleString()} pixels cleaned)`);
+    if (btn) { btn.textContent = '✦ Watermark'; btn.disabled = false; }
+    toast(`✓ Watermark removed — ${changed.toLocaleString()} pixels cleaned`);
+  };
+  img.onerror = () => {
+    if (btn) { btn.textContent = '✦ Watermark'; btn.disabled = false; }
+    toast('⚠ Could not process image');
   };
   img.src = arr[idx].dataUrl;
 }
@@ -2848,9 +2857,19 @@ function renderReviewProblem(p) {
   } else {
     // Question — show image if present, otherwise text
     if (p.questionImage) {
+      const qs = p.questionScale || 100;
       qEl.innerHTML = `
         <div style="margin-bottom:16px;">
-          <img class="problem-img" src="${p.questionImage}" style="width:${p.questionScale||100}%;max-width:100%;border-radius:8px;display:block;background:#ffffff;" />
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+            <span style="font-size:11px;color:var(--text-secondary);font-weight:600;text-transform:uppercase;letter-spacing:0.4px;">Question photo</span>
+            <input type="range" min="20" max="100" value="${qs}" style="flex:1;accent-color:var(--accent);max-width:160px;"
+              oninput="reviewScaleImg('${p.id}','q',this.value)" />
+            <input type="number" id="review-qscale-num-${p.id}" min="20" max="100" value="${qs}"
+              style="width:48px;padding:2px 5px;border:1px solid var(--border);border-radius:5px;font-size:12px;font-weight:600;text-align:center;background:var(--surface);color:var(--text-primary);"
+              oninput="reviewScaleImgTyped('${p.id}','q',this.value)" />
+            <span style="font-size:11px;color:var(--text-secondary);">%</span>
+          </div>
+          <img id="review-qimg-${p.id}" class="problem-img" src="${p.questionImage}" style="width:${qs}%;max-width:100%;border-radius:8px;display:block;background:#ffffff;" />
           ${p.question ? `<div style="margin-top:10px;font-size:12.5px;color:var(--text-secondary);background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px 10px;">${p.question.replace(/\n/g,'<br>')}</div>` : ''}
         </div>`;
     } else {
@@ -2861,6 +2880,24 @@ function renderReviewProblem(p) {
       msEl.innerHTML = renderStructuredMarkscheme(p.markscheme);
     } else {
       msEl.innerHTML = formatMarkscheme(p.solution);
+    }
+    // Solution image with scale slider
+    if (p.solutionImage) {
+      const ss = p.solutionScale || 100;
+      const solContainer = document.createElement('div');
+      solContainer.style.marginTop = '14px';
+      solContainer.innerHTML = `
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+          <span style="font-size:11px;color:var(--text-secondary);font-weight:600;text-transform:uppercase;letter-spacing:0.4px;">Solution photo</span>
+          <input type="range" min="20" max="100" value="${ss}" style="flex:1;accent-color:var(--accent);max-width:160px;"
+            oninput="reviewScaleImg('${p.id}','s',this.value)" />
+          <input type="number" id="review-sscale-num-${p.id}" min="20" max="100" value="${ss}"
+            style="width:48px;padding:2px 5px;border:1px solid var(--border);border-radius:5px;font-size:12px;font-weight:600;text-align:center;background:var(--surface);color:var(--text-primary);"
+            oninput="reviewScaleImgTyped('${p.id}','s',this.value)" />
+          <span style="font-size:11px;color:var(--text-secondary);">%</span>
+        </div>
+        <img id="review-simg-${p.id}" class="problem-img" src="${p.solutionImage}" style="width:${ss}%;max-width:100%;border-radius:6px;border:1px solid var(--border);background:#ffffff;display:block;" />`;
+      msEl.parentNode.insertBefore(solContainer, msEl.nextSibling);
     }
   }
 }
@@ -2990,6 +3027,46 @@ function saveEdit(id) {
 }
 
 function cancelEdit() { editMode = false; renderReviewQueue(); }
+
+// ── Review queue inline image scale ──
+// Updates image width live AND saves to problem record immediately — no Save button needed
+function reviewScaleImg(problemId, side, val) {
+  val = Math.max(20, Math.min(100, parseInt(val) || 100));
+  // Update image live
+  const img = document.getElementById('review-' + side + 'img-' + problemId);
+  if (img) img.style.width = val + '%';
+  // Sync number input
+  const numEl = document.getElementById('review-' + side + 'scale-num-' + problemId);
+  if (numEl) numEl.value = val;
+  // Save to problem record immediately
+  const all = DB.getProblems();
+  const p = all.find(x => x.id === problemId);
+  if (p) {
+    if (side === 'q') p.questionScale = val;
+    else p.solutionScale = val;
+    DB.setProblems(all);
+  }
+}
+
+function reviewScaleImgTyped(problemId, side, val) {
+  const n = parseInt(val);
+  if (isNaN(n) || n < 20 || n > 100) return;
+  const img = document.getElementById('review-' + side + 'img-' + problemId);
+  if (img) img.style.width = n + '%';
+  // Sync slider
+  const sliderParent = document.getElementById('review-' + side + 'img-' + problemId)?.previousElementSibling;
+  if (sliderParent) {
+    const range = sliderParent.querySelector('input[type=range]');
+    if (range) range.value = n;
+  }
+  const all = DB.getProblems();
+  const p = all.find(x => x.id === problemId);
+  if (p) {
+    if (side === 'q') p.questionScale = n;
+    else p.solutionScale = n;
+    DB.setProblems(all);
+  }
+}
 
 // ── Review edit mode image scale helpers ──
 function liveScalePreview(scaleKey, val) {
@@ -5046,4 +5123,83 @@ function openImageFull(refId, problemId) {
 // ══════════════════════════════════════════════════
 function exportProblemPDF() {
   const titleEl = document.getElementById('pdm-title');
-  const contentEl = docu
+  const contentEl = document.getElementById('pdm-content');
+  if (!titleEl || !contentEl) return;
+
+  const printArea = document.getElementById('pdf-print-area');
+  printArea.style.display = 'block';
+  printArea.innerHTML = `
+    <div class="pdf-problem-title">AA Engine — ${titleEl.textContent}</div>
+    <div class="pdf-question">${contentEl.innerHTML}</div>`;
+
+  window.print();
+  setTimeout(() => { printArea.style.display = 'none'; }, 1000);
+  closeModal('problem-detail-modal');
+}
+
+function exportBankPDF() {
+  // Export whatever the bank is currently showing (respects active filters)
+  const topicF   = document.getElementById('bank-filter-topic')?.value || '';
+  const subtopicF = document.getElementById('bank-filter-subtopic')?.value || '';
+  const levelF   = document.getElementById('bank-filter-level')?.value || '';
+  const statusF  = document.getElementById('bank-filter-status')?.value || '';
+  const search   = document.getElementById('bank-search')?.value.toLowerCase().trim() || '';
+
+  let problems = DB.getProblems();
+  if (topicF)    problems = problems.filter(p => p.topic === topicF);
+  if (subtopicF) problems = problems.filter(p => p.subtopic === subtopicF);
+  if (levelF)    problems = problems.filter(p => p.level === levelF);
+  if (statusF)   problems = problems.filter(p => p.status === statusF);
+  else           problems = problems.filter(p => p.status === 'verified'); // default: verified only
+  if (search)    problems = problems.filter(p => (p.question+p.subtopic+(TOPICS[p.topic]?.name||'')).toLowerCase().includes(search));
+
+  if (!problems.length) { toast('No problems match current filters'); return; }
+
+  const filterDesc = [
+    topicF ? `Topic ${topicF}` : '',
+    subtopicF || '',
+    levelF || '',
+    statusF || 'Verified',
+    search ? `"${search}"` : '',
+  ].filter(Boolean).join(' · ');
+
+  const printArea = document.getElementById('pdf-print-area');
+  printArea.style.display = 'block';
+  printArea.innerHTML = `
+    <div style="font-size:16px;font-weight:bold;margin-bottom:6px;border-bottom:2px solid #000;padding-bottom:8px;">
+      AA Engine — Problem Bank Export
+    </div>
+    <div style="font-size:11px;margin-bottom:20px;color:#555;">${filterDesc} · ${problems.length} problem${problems.length!==1?'s':''}</div>
+    ${problems.map((p, i) => `
+      <div style="margin-bottom:32px;page-break-inside:avoid;">
+        <div class="pdf-problem-title">${i+1}. T${p.topic} · ${p.subtopic} · ${p.level} · ${p.marks} marks</div>
+        <div class="pdf-question">${(p.question||'(see uploaded photo)').replace(/\n/g,'<br>')}</div>
+        <div class="pdf-ms-label">Markscheme</div>
+        <div class="pdf-ms-step">${(p.solution||'').replace(/\n/g,'<br>')}</div>
+        ${p.finalAnswer ? `<div class="pdf-answer">Answer: ${p.finalAnswer}</div>` : ''}
+      </div>`).join('')}`;
+  window.print();
+  setTimeout(() => { printArea.style.display = 'none'; }, 1200);
+}
+
+
+
+// ══════════════════════════════════════════════════
+// DARK MODE TOGGLE (syncs the toggle widget state)
+// ══════════════════════════════════════════════════
+function syncDarkToggle() {
+  const t = document.getElementById('dark-toggle');
+  if (t && document.body.classList.contains('dark')) t.classList.add('on');
+}
+
+// ══════════════════════════════════════════════════
+// ENTRY POINT — runs after DOM is ready
+// ══════════════════════════════════════════════════
+window.addEventListener('DOMContentLoaded', () => {
+  syncDarkToggle();
+  restoreImageDisplayWidth();
+  bootApp();
+});
+</script>
+</body>
+</html>
