@@ -556,6 +556,7 @@ body.dark .processing-overlay { background: rgba(26,29,46,0.9); }
     <div class="topbar">
       <div class="topbar-title" id="tab-title">Dashboard</div>
       <div class="topbar-right">
+        <span id="sb-sync-indicator" style="font-size:11.5px;color:var(--text-secondary);"></span>
         <button class="icon-btn" onclick="toggleDark()" title="Toggle dark mode">
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13 10A6 6 0 0 1 6 3a6 6 0 1 0 7 7z"/></svg>
         </button>
@@ -1087,6 +1088,13 @@ body.dark .processing-overlay { background: rgba(26,29,46,0.9); }
             <div><div class="settings-label">Load sample problems</div><div class="settings-hint">Pre-fill with 6 real IB-style problems for testing</div></div>
             <button class="btn btn-ghost btn-sm" onclick="loadSampleData()">Load Samples</button>
           </div>
+          <div class="settings-row">
+            <div>
+              <div class="settings-label">Compress all stored photos</div>
+              <div class="settings-hint">Re-saves all problem photos as JPEG to free up storage space. Run this if you're getting storage errors.</div>
+            </div>
+            <button class="btn btn-ghost btn-sm" id="compress-btn" onclick="compressAllPhotos()">Compress Photos</button>
+          </div>
         </div>
 
         <div class="settings-section">
@@ -1339,19 +1347,173 @@ const ERROR_REASONS = [
 ];
 
 // Storage helpers
+// ══════════════════════════════════════════════════
+// SUPABASE CONFIG
+// ══════════════════════════════════════════════════
+const SUPABASE_URL = 'https://pndnjpjpcyekiqbozveh.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBuZG5qcGpwY3lla2lxYm96dmVoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYyMjA4ODUsImV4cCI6MjA5MTc5Njg4NX0.nGOTLIwKsztAP-w_gaq1qjLz0F_DBCmSeffGNsohmME';
+
+const SB = {
+  headers: {
+    'apikey': SUPABASE_KEY,
+    'Authorization': 'Bearer ' + SUPABASE_KEY,
+    'Content-Type': 'application/json',
+    'Prefer': 'return=minimal'
+  },
+
+  // Fetch all rows from a table and return as array of data objects
+  async getAll(table) {
+    try {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?select=id,data&order=updated_at.asc`, {
+        headers: SB.headers
+      });
+      if (!res.ok) return null;
+      const rows = await res.json();
+      return rows.map(r => r.data);
+    } catch { return null; }
+  },
+
+  // Upsert a single row
+  async upsert(table, id, data) {
+    try {
+      await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
+        method: 'POST',
+        headers: { ...SB.headers, 'Prefer': 'resolution=merge-duplicates,return=minimal' },
+        body: JSON.stringify({ id, data, updated_at: new Date().toISOString() })
+      });
+    } catch { /* silent — localStorage already saved */ }
+  },
+
+  // Upsert full array — replaces all rows for the table by upserting each item
+  async upsertAll(table, items) {
+    if (!items || !items.length) return;
+    try {
+      const rows = items.map(item => ({
+        id: item.id,
+        data: item,
+        updated_at: new Date().toISOString()
+      }));
+      // Batch in chunks of 50 to avoid request size limits
+      for (let i = 0; i < rows.length; i += 50) {
+        const chunk = rows.slice(i, i + 50);
+        await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
+          method: 'POST',
+          headers: { ...SB.headers, 'Prefer': 'resolution=merge-duplicates,return=minimal' },
+          body: JSON.stringify(chunk)
+        });
+      }
+    } catch { /* silent */ }
+  },
+
+  // Delete a row by id
+  async delete(table, id) {
+    try {
+      await fetch(`${SUPABASE_URL}/rest/v1/${table}?id=eq.${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers: SB.headers
+      });
+    } catch { /* silent */ }
+  }
+};
+
+// ══════════════════════════════════════════════════
+// DB — localStorage cache + Supabase persistence
+// Reads always come from localStorage (instant).
+// Writes go to localStorage immediately, then async to Supabase.
+// On boot, Supabase data is pulled and merges into localStorage.
+// ══════════════════════════════════════════════════
 const DB = {
   get: k => { try { return JSON.parse(localStorage.getItem('aae_'+k) || 'null'); } catch { return null; } },
-  set: (k,v) => localStorage.setItem('aae_'+k, JSON.stringify(v)),
+  set: (k, v) => {
+    try {
+      localStorage.setItem('aae_'+k, JSON.stringify(v));
+    } catch(e) {
+      if (e.name === 'QuotaExceededError' || e.code === 22) throw e;
+    }
+  },
+
+  // Problems
   getProblems: () => DB.get('problems') || [],
-  setProblems: v => DB.set('problems', v),
+  setProblems: v => {
+    DB.set('problems', v);
+    SB.upsertAll('aa_problems', v);
+  },
+
+  // Students
   getStudents: () => DB.get('students') || [],
-  setStudents: v => DB.set('students', v),
+  setStudents: v => {
+    DB.set('students', v);
+    SB.upsertAll('aa_students', v);
+  },
+
+  // Assignments
   getAssignments: () => DB.get('assignments') || [],
-  setAssignments: v => DB.set('assignments', v),
+  setAssignments: v => {
+    DB.set('assignments', v);
+    SB.upsertAll('aa_assignments', v);
+  },
+
+  // Activity, custom errors — localStorage only (non-critical)
   getActivity: () => DB.get('activity') || [],
   setActivity: v => DB.set('activity', v),
   getCustomErrors: () => DB.get('custom_errors') || [],
   setCustomErrors: v => DB.set('custom_errors', v),
+
+  // Pull fresh data from Supabase and merge into localStorage
+  // Called on boot — newer Supabase data wins over stale localStorage
+  async syncFromSupabase() {
+    const indicator = document.getElementById('sb-sync-indicator');
+    if (indicator) indicator.textContent = '⟳ Syncing…';
+
+    let synced = false;
+
+    const [sbProblems, sbStudents, sbAssignments] = await Promise.all([
+      SB.getAll('aa_problems'),
+      SB.getAll('aa_students'),
+      SB.getAll('aa_assignments')
+    ]);
+
+    if (sbProblems !== null) {
+      // Merge: combine localStorage + Supabase, Supabase wins on conflict
+      const local = DB.get('problems') || [];
+      const localMap = Object.fromEntries(local.map(p => [p.id, p]));
+      const sbMap = Object.fromEntries(sbProblems.map(p => [p.id, p]));
+      const merged = Object.values({ ...localMap, ...sbMap });
+      DB.set('problems', merged);
+      synced = true;
+    }
+
+    if (sbStudents !== null) {
+      const local = DB.get('students') || [];
+      const localMap = Object.fromEntries(local.map(s => [s.id, s]));
+      const sbMap = Object.fromEntries(sbStudents.map(s => [s.id, s]));
+      DB.set('students', Object.values({ ...localMap, ...sbMap }));
+    }
+
+    if (sbAssignments !== null) {
+      const local = DB.get('assignments') || [];
+      const localMap = Object.fromEntries(local.map(a => [a.id, a]));
+      const sbMap = Object.fromEntries(sbAssignments.map(a => [a.id, a]));
+      DB.set('assignments', Object.values({ ...localMap, ...sbMap }));
+    }
+
+    // Migrate any existing localStorage problems that aren't in Supabase yet
+    if (sbProblems !== null) {
+      const sbIds = new Set(sbProblems.map(p => p.id));
+      const localOnly = (DB.get('problems') || []).filter(p => !sbIds.has(p.id));
+      if (localOnly.length > 0) {
+        await SB.upsertAll('aa_problems', localOnly);
+        if (indicator) indicator.textContent = `✓ Migrated ${localOnly.length} local problems to Supabase`;
+        setTimeout(() => { if (indicator) indicator.textContent = ''; }, 4000);
+        return;
+      }
+    }
+
+    if (indicator) {
+      indicator.textContent = synced ? '✓ Synced' : '⚠ Offline — using local data';
+      setTimeout(() => { if (indicator) indicator.textContent = ''; }, 3000);
+    }
+  }
 };
 
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
@@ -1571,6 +1733,8 @@ function initTutorApp() {
   buildStudentDropdowns();
   renderStudentNotes();
   setupPasteHandler();
+  // Pull fresh data from Supabase in background — re-renders when done
+  setTimeout(triggerSupabaseSync, 500);
 }
 
 const tabTitles = { dashboard:'Dashboard', bank:'Problem Bank', upload:'Upload', generate:'Generate', review:'Review Queue', session:'Session Mode', assignments:'Assignments', students:'Students', analytics:'Analytics', errorreports:'Error Reports', formula:'Formula Booklet', settings:'Settings' };
@@ -2110,7 +2274,7 @@ function removeWatermark(type, idx) {
     }
 
     ctx.putImageData(imageData, 0, 0);
-    arr[idx].dataUrl = canvas.toDataURL('image/png'); // PNG to avoid JPEG re-compression artefacts
+    arr[idx].dataUrl = canvas.toDataURL('image/jpeg', 0.82); // PNG to avoid JPEG re-compression artefacts
     renderUploadZone(type);
     if (btn) { btn.textContent = '✦ Watermark'; btn.disabled = false; }
     toast(`✓ Watermark removed — ${changed.toLocaleString()} pixels cleaned`);
@@ -2393,7 +2557,13 @@ async function submitUpload() {
 
   const problems = DB.getProblems();
   problems.push(p);
-  DB.setProblems(problems);
+  try {
+    DB.set('problems', problems); // local cache — may fail if browser cache is full
+  } catch (e) {
+    // localStorage full — that's OK, Supabase is the real store. Just skip local cache.
+  }
+  // Always push to Supabase regardless of localStorage state
+  SB.upsertAll('aa_problems', problems);
   addActivity(`Uploaded: T${topic} · ${subtopic} · ${level} · ${marks}m`, '⬆');
   toast('✓ Uploaded — sent to Review Queue');
   clearUploadForm();
@@ -3041,7 +3211,7 @@ function reviewResizePhoto(problemId, side) {
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, targetW, targetH);
     ctx.drawImage(img, 0, 0, targetW, targetH);
-    const newDataUrl = canvas.toDataURL('image/png');
+    const newDataUrl = canvas.toDataURL('image/jpeg', 0.82);
     if (side === 'q') p.questionImage = newDataUrl;
     else p.solutionImage = newDataUrl;
     DB.setProblems(all);
@@ -3084,7 +3254,7 @@ function reviewRemoveWatermark(problemId, side) {
       }
     }
     ctx.putImageData(imageData, 0, 0);
-    const newDataUrl = canvas.toDataURL('image/png');
+    const newDataUrl = canvas.toDataURL('image/jpeg', 0.82);
     if (side === 'q') p.questionImage = newDataUrl;
     else p.solutionImage = newDataUrl;
     DB.setProblems(all);
@@ -5043,6 +5213,63 @@ function loadSampleData() {
   toast(`✓ ${toAdd.length} sample problems loaded`);
 }
 
+// Re-compress all stored photos as JPEG to free storage space
+async function compressAllPhotos() {
+  const btn = document.getElementById('compress-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Compressing…'; }
+
+  const problems = DB.getProblems();
+  let compressed = 0;
+  let savedKB = 0;
+
+  const compressDataUrl = (dataUrl, quality) => new Promise(resolve => {
+    if (!dataUrl || dataUrl.startsWith('data:image/jpeg')) {
+      // Already JPEG — re-compress at lower quality
+    }
+    if (!dataUrl) { resolve(null); return; }
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0);
+      resolve(canvas.toDataURL('image/jpeg', quality));
+    };
+    img.onerror = () => resolve(dataUrl); // keep original on error
+    img.src = dataUrl;
+  });
+
+  for (const p of problems) {
+    if (p.questionImage) {
+      const before = p.questionImage.length;
+      p.questionImage = await compressDataUrl(p.questionImage, 0.75);
+      savedKB += Math.round((before - p.questionImage.length) / 1024);
+      compressed++;
+    }
+    if (p.solutionImage) {
+      const before = p.solutionImage.length;
+      p.solutionImage = await compressDataUrl(p.solutionImage, 0.75);
+      savedKB += Math.round((before - p.solutionImage.length) / 1024);
+      compressed++;
+    }
+  }
+
+  try {
+    DB.setProblems(problems);
+    const msg = savedKB > 0
+      ? `✓ Compressed ${compressed} photos, freed ~${savedKB > 1024 ? (savedKB/1024).toFixed(1)+'MB' : savedKB+'KB'}`
+      : `✓ Photos compressed (already optimised)`;
+    toast(msg);
+    setTimeout(calcStorageUsage, 500);
+  } catch(e) {
+    toast('⚠ Still too large after compression — try deleting some problems with photos');
+  }
+
+  if (btn) { btn.disabled = false; btn.textContent = 'Compress Photos'; }
+}
+
 // ══════════════════════════════════════════════════
 // CUSTOM MARKS TOGGLE
 // ══════════════════════════════════════════════════
@@ -5182,7 +5409,7 @@ function ipmApplyPxWidth() {
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, targetW, targetH);
     ctx.drawImage(src, 0, 0, targetW, targetH);
-    entry.dataUrl = canvas.toDataURL('image/png');
+    entry.dataUrl = canvas.toDataURL('image/jpeg', 0.82);
     entry.pxWidth = targetW;
     entry._natW = targetW; entry._natH = targetH;
     renderIpmEditor();
@@ -5316,7 +5543,7 @@ function ipmApplyCrop() {
   ctx.drawImage(img, cx, cy, cw, ch, 0, 0, cw, ch);
 
   const images = ipmCurrentType === 'q' ? uploadQImages : uploadSImages;
-  images[ipmCurrentPage].dataUrl = canvas.toDataURL('image/png');
+  images[ipmCurrentPage].dataUrl = canvas.toDataURL('image/jpeg', 0.82);
   ipmCancelCrop();
   renderIpmEditor();
   renderIpmCombinedPreview();
@@ -5628,6 +5855,21 @@ window.addEventListener('DOMContentLoaded', () => {
   restoreImageDisplayWidth();
   bootApp();
 });
+
+// After tutor app is visible, sync from Supabase in background
+// Re-renders all panels once fresh data arrives
+window._sbSyncDone = false;
+function triggerSupabaseSync() {
+  if (window._sbSyncDone) return;
+  window._sbSyncDone = true;
+  DB.syncFromSupabase().then(() => {
+    // Re-render everything with fresh data
+    renderDashboard();
+    renderBank();
+    updateReviewBadge();
+    renderReviewQueue();
+  });
+}
 </script>
 </body>
 </html>
