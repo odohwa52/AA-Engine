@@ -2732,7 +2732,7 @@ function renderReviewQueue() {
 
     <div class="review-layout">
       <div class="review-main" id="review-main-panel">
-        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:18px;">
+        <div id="review-tag-row-${p.id}" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:18px;">
           <span class="tag tag-topic">T${p.topic}</span>
           ${p.level==='HL'?'<span class="tag tag-hl">HL</span>':'<span class="tag tag-sl">SL</span>'}
           <span class="tag tag-marks">${p.marks} marks</span>
@@ -2769,11 +2769,57 @@ function renderReviewQueue() {
 
       <div class="review-sidebar-panel">
         <div class="review-meta-card">
-          <div style="font-size:11px;font-weight:700;color:var(--text-secondary);letter-spacing:0.6px;text-transform:uppercase;margin-bottom:10px;">Problem Info</div>
+          <div style="font-size:11px;font-weight:700;color:var(--text-secondary);letter-spacing:0.6px;text-transform:uppercase;margin-bottom:12px;">Problem Details <span style="font-weight:400;text-transform:none;font-size:10.5px;color:var(--accent);">— editable</span></div>
+
+          <!-- Topic -->
+          <div class="review-meta-row">
+            <span class="review-meta-label">Topic</span>
+            <select class="form-select" style="font-size:12px;padding:3px 6px;width:140px;" onchange="reviewUpdateField('${p.id}','topic',this.value);reviewUpdateSubtopicOptions('${p.id}',this.value)">
+              <option value="1" ${p.topic==='1'||p.topic===1?'selected':''}>T1 — Number & Algebra</option>
+              <option value="2" ${p.topic==='2'||p.topic===2?'selected':''}>T2 — Functions</option>
+              <option value="3" ${p.topic==='3'||p.topic===3?'selected':''}>T3 — Geometry & Trig</option>
+              <option value="4" ${p.topic==='4'||p.topic===4?'selected':''}>T4 — Stats & Probability</option>
+              <option value="5" ${p.topic==='5'||p.topic===5?'selected':''}>T5 — Calculus</option>
+            </select>
+          </div>
+
+          <!-- Subtopic -->
+          <div class="review-meta-row" style="flex-direction:column;align-items:flex-start;gap:5px;">
+            <span class="review-meta-label">Subtopic</span>
+            <input class="form-input" id="review-subtopic-${p.id}" value="${p.subtopic||''}"
+              style="font-size:12px;padding:4px 7px;width:100%;"
+              onchange="reviewUpdateField('${p.id}','subtopic',this.value)"
+              placeholder="e.g. Integration by parts" />
+            <div id="review-subtopic-suggestions-${p.id}" style="display:flex;flex-wrap:wrap;gap:4px;margin-top:2px;">
+              ${(TOPICS[p.topic]?.subtopics||[]).map(st =>
+                `<span style="font-size:10.5px;padding:2px 7px;border-radius:4px;background:var(--bg);border:1px solid var(--border);cursor:pointer;color:var(--text-secondary);"
+                  onclick="document.getElementById('review-subtopic-${p.id}').value='${st}';reviewUpdateField('${p.id}','subtopic','${st}')">${st}</span>`
+              ).join('')}
+            </div>
+          </div>
+
+          <!-- Level -->
+          <div class="review-meta-row">
+            <span class="review-meta-label">Level</span>
+            <select class="form-select" style="font-size:12px;padding:3px 6px;width:80px;" onchange="reviewUpdateField('${p.id}','level',this.value)">
+              <option value="SL" ${p.level==='SL'?'selected':''}>SL</option>
+              <option value="HL" ${p.level==='HL'?'selected':''}>HL</option>
+            </select>
+          </div>
+
+          <!-- Marks -->
+          <div class="review-meta-row">
+            <span class="review-meta-label">Marks</span>
+            <input type="number" class="form-input" min="1" max="30" value="${p.marks}"
+              style="font-size:12px;padding:3px 6px;width:60px;text-align:center;"
+              onchange="reviewUpdateField('${p.id}','marks',parseInt(this.value)||p.marks)" />
+          </div>
+
+          <!-- Source (read-only) -->
           <div class="review-meta-row"><span class="review-meta-label">Source</span><span class="review-meta-value">${p.source==='generated'?'★ Generated':'⬆ Uploaded'}</span></div>
           ${refProblem?`<div class="review-meta-row"><span class="review-meta-label">Modeled after</span><span class="review-meta-value" style="color:var(--accent);">#${refProblem.id.slice(-4)}</span></div>`:''}
-          <div class="review-meta-row"><span class="review-meta-label">Level</span><span class="review-meta-value">${p.level}</span></div>
-          <div class="review-meta-row"><span class="review-meta-label">Marks</span><span class="review-meta-value">${p.marks}</span></div>
+
+          <!-- AI/verification info (read-only) -->
           ${p.confidence!=null?`<div class="review-meta-row">
             <span class="review-meta-label">AI confidence</span>
             <span class="review-meta-value" style="flex-direction:column;align-items:flex-start;gap:3px;">
@@ -2976,6 +3022,37 @@ function uploadDiagram(problemId, input) {
 // ── Hint system ──
 // hintEnabled flag is stored on each problem.
 // Hint text = first method step from the markscheme (first M1 line).
+// ── Review queue inline field editing ──
+// Saves any field change immediately to DB, updates the tags at top of panel
+function reviewUpdateField(problemId, field, value) {
+  const all = DB.getProblems();
+  const p = all.find(x => x.id === problemId);
+  if (!p) return;
+  p[field] = value;
+  if (field === 'marks') p.marks = parseInt(value) || p.marks;
+  DB.setProblems(all);
+  // Refresh the tag row at the top of the review panel
+  const tagRow = document.getElementById('review-tag-row-' + problemId);
+  if (tagRow) {
+    tagRow.innerHTML = `
+      <span class="tag tag-topic">T${p.topic}</span>
+      ${p.level==='HL'?'<span class="tag tag-hl">HL</span>':'<span class="tag tag-sl">SL</span>'}
+      <span class="tag tag-marks">${p.marks} marks</span>
+      <span style="font-size:11px;color:var(--text-secondary);align-self:center;">Topic ${p.topic} · ${p.subtopic}</span>`;
+  }
+}
+
+// When topic changes in review, refresh subtopic suggestions
+function reviewUpdateSubtopicOptions(problemId, topicVal) {
+  const container = document.getElementById('review-subtopic-suggestions-' + problemId);
+  if (!container) return;
+  const subtopics = TOPICS[topicVal]?.subtopics || [];
+  container.innerHTML = subtopics.map(st =>
+    `<span style="font-size:10.5px;padding:2px 7px;border-radius:4px;background:var(--bg);border:1px solid var(--border);cursor:pointer;color:var(--text-secondary);"
+      onclick="document.getElementById('review-subtopic-${problemId}').value='${st}';reviewUpdateField('${problemId}','subtopic','${st}')">${st}</span>`
+  ).join('');
+}
+
 function toggleHint(problemId) {
   const all = DB.getProblems();
   const p = all.find(x => x.id === problemId);
