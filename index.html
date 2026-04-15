@@ -2943,20 +2943,35 @@ function renderReviewProblem(p) {
       const qs = p.questionScale || 100;
       qEl.innerHTML = `
         <div style="margin-bottom:16px;">
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-            <span style="font-size:11px;color:var(--text-secondary);font-weight:600;text-transform:uppercase;letter-spacing:0.4px;">Question photo</span>
-            <input type="range" min="20" max="100" value="${qs}" style="flex:1;accent-color:var(--accent);max-width:160px;"
-              oninput="reviewScaleImg('${p.id}','q',this.value)" />
-            <input type="number" id="review-qscale-num-${p.id}" min="20" max="100" value="${qs}"
-              style="width:48px;padding:2px 5px;border:1px solid var(--border);border-radius:5px;font-size:12px;font-weight:600;text-align:center;background:var(--surface);color:var(--text-primary);"
-              oninput="reviewScaleImgTyped('${p.id}','q',this.value)" />
-            <span style="font-size:11px;color:var(--text-secondary);">%</span>
+          <!-- Photo toolbar -->
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:8px;padding:7px 10px;background:var(--bg);border:1px solid var(--border);border-radius:8px;">
+            <span style="font-size:11px;color:var(--text-secondary);font-weight:600;text-transform:uppercase;letter-spacing:0.4px;margin-right:2px;">Question photo</span>
+            <input type="number" id="review-qpx-${p.id}" placeholder="px width"
+              style="width:72px;padding:3px 6px;border:1px solid var(--border);border-radius:5px;font-size:12px;font-weight:600;text-align:center;background:var(--surface);color:var(--text-primary);"
+              onkeydown="if(event.key==='Enter')reviewResizePhoto('${p.id}','q')" />
+            <button class="btn btn-ghost btn-xs" onclick="reviewResizePhoto('${p.id}','q')" title="Resize to px width">↔ Resize</button>
+            <button class="btn btn-ghost btn-xs" onclick="reviewRemoveWatermark('${p.id}','q')" style="color:var(--amber);border-color:var(--amber);" title="Remove watermark">✦ Remove watermark</button>
+            <input type="file" id="review-q-reupload-${p.id}" accept="image/*" multiple style="display:none;" onchange="reviewReuploadPhoto('${p.id}','q',this)" />
+            <button class="btn btn-ghost btn-xs" onclick="document.getElementById('review-q-reupload-${p.id}').click()" title="Replace photo">⬆ Replace</button>
+            <button class="strip-btn danger" onclick="reviewRemovePhoto('${p.id}','q')" style="border:1px solid #FCA5A5;border-radius:4px;padding:2px 7px;font-size:11px;color:var(--red);" title="Remove photo">✕ Remove</button>
+            <span style="margin-left:auto;font-size:11px;color:var(--text-secondary);" id="review-qpx-label-${p.id}"></span>
           </div>
-          <img id="review-qimg-${p.id}" class="problem-img" src="${p.questionImage}" style="width:${qs}%;max-width:100%;border-radius:8px;display:block;background:#ffffff;" />
+          <img id="review-qimg-${p.id}" class="problem-img" src="${p.questionImage}"
+            style="width:${qs}%;max-width:100%;border-radius:8px;display:block;background:#ffffff;"
+            onload="reviewShowNatSize('${p.id}','q',this)" />
           ${p.question ? `<div style="margin-top:10px;font-size:12.5px;color:var(--text-secondary);background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px 10px;">${p.question.replace(/\n/g,'<br>')}</div>` : ''}
         </div>`;
     } else {
-      qEl.innerHTML = `<div class="question-text" style="font-size:15px;margin-bottom:0;">${(p.question||'').replace(/\n/g,'<br>')}</div>`;
+      qEl.innerHTML = `
+        <div>
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+            <div class="question-text" style="font-size:15px;flex:1;">${(p.question||'').replace(/\n/g,'<br>')}</div>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <input type="file" id="review-q-reupload-${p.id}" accept="image/*" multiple style="display:none;" onchange="reviewReuploadPhoto('${p.id}','q',this)" />
+            <button class="btn btn-ghost btn-xs" onclick="document.getElementById('review-q-reupload-${p.id}').click()">⬆ Add question photo</button>
+          </div>
+        </div>`;
     }
     // Markscheme
     if (p.markscheme && Array.isArray(p.markscheme) && p.markscheme.length) {
@@ -2964,28 +2979,157 @@ function renderReviewProblem(p) {
     } else {
       msEl.innerHTML = formatMarkscheme(p.solution);
     }
-    // Solution image with scale slider
+    // Solution image with photo toolbar
     if (p.solutionImage) {
       const ss = p.solutionScale || 100;
       const solContainer = document.createElement('div');
       solContainer.style.marginTop = '14px';
       solContainer.innerHTML = `
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-          <span style="font-size:11px;color:var(--text-secondary);font-weight:600;text-transform:uppercase;letter-spacing:0.4px;">Solution photo</span>
-          <input type="range" min="20" max="100" value="${ss}" style="flex:1;accent-color:var(--accent);max-width:160px;"
-            oninput="reviewScaleImg('${p.id}','s',this.value)" />
-          <input type="number" id="review-sscale-num-${p.id}" min="20" max="100" value="${ss}"
-            style="width:48px;padding:2px 5px;border:1px solid var(--border);border-radius:5px;font-size:12px;font-weight:600;text-align:center;background:var(--surface);color:var(--text-primary);"
-            oninput="reviewScaleImgTyped('${p.id}','s',this.value)" />
-          <span style="font-size:11px;color:var(--text-secondary);">%</span>
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:8px;padding:7px 10px;background:var(--bg);border:1px solid var(--border);border-radius:8px;">
+          <span style="font-size:11px;color:var(--text-secondary);font-weight:600;text-transform:uppercase;letter-spacing:0.4px;margin-right:2px;">Solution photo</span>
+          <input type="number" id="review-spx-${p.id}" placeholder="px width"
+            style="width:72px;padding:3px 6px;border:1px solid var(--border);border-radius:5px;font-size:12px;font-weight:600;text-align:center;background:var(--surface);color:var(--text-primary);"
+            onkeydown="if(event.key==='Enter')reviewResizePhoto('${p.id}','s')" />
+          <button class="btn btn-ghost btn-xs" onclick="reviewResizePhoto('${p.id}','s')" title="Resize to px width">↔ Resize</button>
+          <button class="btn btn-ghost btn-xs" onclick="reviewRemoveWatermark('${p.id}','s')" style="color:var(--amber);border-color:var(--amber);" title="Remove watermark">✦ Remove watermark</button>
+          <input type="file" id="review-s-reupload-${p.id}" accept="image/*" multiple style="display:none;" onchange="reviewReuploadPhoto('${p.id}','s',this)" />
+          <button class="btn btn-ghost btn-xs" onclick="document.getElementById('review-s-reupload-${p.id}').click()" title="Replace photo">⬆ Replace</button>
+          <button class="strip-btn danger" onclick="reviewRemovePhoto('${p.id}','s')" style="border:1px solid #FCA5A5;border-radius:4px;padding:2px 7px;font-size:11px;color:var(--red);" title="Remove photo">✕ Remove</button>
+          <span style="margin-left:auto;font-size:11px;color:var(--text-secondary);" id="review-spx-label-${p.id}"></span>
         </div>
-        <img id="review-simg-${p.id}" class="problem-img" src="${p.solutionImage}" style="width:${ss}%;max-width:100%;border-radius:6px;border:1px solid var(--border);background:#ffffff;display:block;" />`;
+        <img id="review-simg-${p.id}" class="problem-img" src="${p.solutionImage}"
+          style="width:${ss}%;max-width:100%;border-radius:6px;border:1px solid var(--border);background:#ffffff;display:block;"
+          onload="reviewShowNatSize('${p.id}','s',this)" />`;
       msEl.parentNode.insertBefore(solContainer, msEl.nextSibling);
+    } else {
+      // No solution image — offer to add one
+      const addContainer = document.createElement('div');
+      addContainer.style.marginTop = '12px';
+      addContainer.innerHTML = `
+        <input type="file" id="review-s-reupload-${p.id}" accept="image/*" multiple style="display:none;" onchange="reviewReuploadPhoto('${p.id}','s',this)" />
+        <button class="btn btn-ghost btn-xs" onclick="document.getElementById('review-s-reupload-${p.id}').click()">⬆ Add solution photo</button>`;
+      msEl.parentNode.insertBefore(addContainer, msEl.nextSibling);
     }
   }
 }
 
-// ── Render structured markscheme JSON ──
+// ── Review queue photo editing ──
+
+function reviewShowNatSize(problemId, side, imgEl) {
+  const label = document.getElementById('review-' + side + 'px-label-' + problemId);
+  if (label && imgEl.naturalWidth) label.textContent = imgEl.naturalWidth + '×' + imgEl.naturalHeight + 'px';
+}
+
+function reviewResizePhoto(problemId, side) {
+  const input = document.getElementById('review-' + side + 'px-' + problemId);
+  const targetW = parseInt(input?.value);
+  if (!targetW || targetW < 50 || targetW > 5000) { toast('⚠ Enter a valid width (50–5000 px)'); return; }
+
+  const all = DB.getProblems();
+  const p = all.find(x => x.id === problemId);
+  if (!p) return;
+  const src = side === 'q' ? p.questionImage : p.solutionImage;
+  if (!src) return;
+
+  const img = new Image();
+  img.onload = () => {
+    const aspect = img.naturalHeight / img.naturalWidth;
+    const targetH = Math.round(targetW * aspect);
+    const canvas = document.createElement('canvas');
+    canvas.width = targetW; canvas.height = targetH;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, targetW, targetH);
+    ctx.drawImage(img, 0, 0, targetW, targetH);
+    const newDataUrl = canvas.toDataURL('image/png');
+    if (side === 'q') p.questionImage = newDataUrl;
+    else p.solutionImage = newDataUrl;
+    DB.setProblems(all);
+    // Update displayed image
+    const imgEl = document.getElementById('review-' + side + 'img-' + problemId);
+    if (imgEl) { imgEl.src = newDataUrl; imgEl.onload = () => reviewShowNatSize(problemId, side, imgEl); }
+    toast(`✓ Resized to ${targetW}px wide`);
+  };
+  img.src = src;
+}
+
+function reviewRemoveWatermark(problemId, side) {
+  const all = DB.getProblems();
+  const p = all.find(x => x.id === problemId);
+  if (!p) return;
+  const src = side === 'q' ? p.questionImage : p.solutionImage;
+  if (!src) { toast('No photo to process'); return; }
+
+  toast('⏳ Removing watermark…');
+  const img = new Image();
+  img.onload = () => {
+    const canvas = document.createElement('canvas');
+    canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0);
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const data = imageData.data;
+    let changed = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      const r = data[i], g = data[i+1], b = data[i+2];
+      const brightness = (r + g + b) / 3;
+      const rg = r - g, rb = r - b;
+      const isWatermark = brightness > 200 && rg >= 5 && rg <= 40 && rb >= 3 && rb <= 35 && r > 180;
+      if (isWatermark) {
+        const strength = Math.min(1, rg / 15);
+        data[i]   = Math.min(255, Math.round(r + (255 - r) * strength * 0.9));
+        data[i+1] = Math.min(255, Math.round(g + (255 - g) * strength * 1.2));
+        data[i+2] = Math.min(255, Math.round(b + (255 - b) * strength * 1.1));
+        changed++;
+      }
+    }
+    ctx.putImageData(imageData, 0, 0);
+    const newDataUrl = canvas.toDataURL('image/png');
+    if (side === 'q') p.questionImage = newDataUrl;
+    else p.solutionImage = newDataUrl;
+    DB.setProblems(all);
+    const imgEl = document.getElementById('review-' + side + 'img-' + problemId);
+    if (imgEl) imgEl.src = newDataUrl;
+    toast(`✓ Watermark removed — ${changed.toLocaleString()} pixels cleaned`);
+  };
+  img.src = src;
+}
+
+async function reviewReuploadPhoto(problemId, side, input) {
+  const files = Array.from(input.files);
+  if (!files.length) return;
+  input.value = '';
+
+  const all = DB.getProblems();
+  const p = all.find(x => x.id === problemId);
+  if (!p) return;
+
+  // Read all files and stitch if multiple
+  const entries = await Promise.all(files.map(f => readFileAsDataUrl(f)));
+  const stitched = await stitchImages(entries);
+
+  if (side === 'q') p.questionImage = stitched;
+  else p.solutionImage = stitched;
+  DB.setProblems(all);
+
+  // Re-render the whole review problem to show new image with toolbar
+  renderReviewQueue();
+  toast(`✓ Photo replaced (${files.length} page${files.length!==1?'s':''})`);
+}
+
+function reviewRemovePhoto(problemId, side) {
+  if (!confirm(`Remove the ${side === 'q' ? 'question' : 'solution'} photo? This cannot be undone.`)) return;
+  const all = DB.getProblems();
+  const p = all.find(x => x.id === problemId);
+  if (!p) return;
+  if (side === 'q') p.questionImage = null;
+  else p.solutionImage = null;
+  DB.setProblems(all);
+  renderReviewQueue();
+  toast('Photo removed');
+}
+
+
 function renderStructuredMarkscheme(ms) {
   return ms.map(part => {
     const partHead = part.part
