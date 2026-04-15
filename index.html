@@ -1436,8 +1436,11 @@ const DB = {
   getProblems: () => DB.get('problems') || [],
   setProblems: v => {
     DB.set('problems', v);
-    SB.upsertAll('aa_problems', v);
+    // Debounce Supabase sync — batch edits within 2s into one request
+    clearTimeout(DB._problemsSyncTimer);
+    DB._problemsSyncTimer = setTimeout(() => SB.upsertAll('aa_problems', v), 2000);
   },
+  _problemsSyncTimer: null,
 
   // Students
   getStudents: () => DB.get('students') || [],
@@ -1465,8 +1468,6 @@ const DB = {
     const indicator = document.getElementById('sb-sync-indicator');
     if (indicator) indicator.textContent = '⟳ Syncing…';
 
-    let synced = false;
-
     const [sbProblems, sbStudents, sbAssignments] = await Promise.all([
       SB.getAll('aa_problems'),
       SB.getAll('aa_students'),
@@ -1474,44 +1475,48 @@ const DB = {
     ]);
 
     if (sbProblems !== null) {
-      // Merge: combine localStorage + Supabase, Supabase wins on conflict
       const local = DB.get('problems') || [];
-      const localMap = Object.fromEntries(local.map(p => [p.id, p]));
-      const sbMap = Object.fromEntries(sbProblems.map(p => [p.id, p]));
-      const merged = Object.values({ ...localMap, ...sbMap });
-      DB.set('problems', merged);
-      synced = true;
+      const localIds = new Set(local.map(p => p.id));
+      // Local always wins — only add Supabase items that don't exist locally
+      const sbOnlyItems = sbProblems.filter(p => !localIds.has(p.id));
+      if (sbOnlyItems.length > 0) {
+        const merged = [...local, ...sbOnlyItems];
+        try { DB.set('problems', merged); } catch(e) { /* cache full */ }
+      }
+      // Push any local-only items up to Supabase
+      const sbIds = new Set(sbProblems.map(p => p.id));
+      const localOnly = local.filter(p => !sbIds.has(p.id));
+      if (localOnly.length > 0) {
+        await SB.upsertAll('aa_problems', localOnly);
+        if (indicator) {
+          indicator.textContent = `✓ Synced (${localOnly.length} migrated)`;
+          setTimeout(() => { if (indicator) indicator.textContent = ''; }, 4000);
+          return;
+        }
+      }
     }
 
     if (sbStudents !== null) {
       const local = DB.get('students') || [];
-      const localMap = Object.fromEntries(local.map(s => [s.id, s]));
-      const sbMap = Object.fromEntries(sbStudents.map(s => [s.id, s]));
-      DB.set('students', Object.values({ ...localMap, ...sbMap }));
+      const localIds = new Set(local.map(s => s.id));
+      const sbOnly = sbStudents.filter(s => !localIds.has(s.id));
+      if (sbOnly.length > 0) {
+        try { DB.set('students', [...local, ...sbOnly]); } catch(e) {}
+      }
     }
 
     if (sbAssignments !== null) {
       const local = DB.get('assignments') || [];
-      const localMap = Object.fromEntries(local.map(a => [a.id, a]));
-      const sbMap = Object.fromEntries(sbAssignments.map(a => [a.id, a]));
-      DB.set('assignments', Object.values({ ...localMap, ...sbMap }));
-    }
-
-    // Migrate any existing localStorage problems that aren't in Supabase yet
-    if (sbProblems !== null) {
-      const sbIds = new Set(sbProblems.map(p => p.id));
-      const localOnly = (DB.get('problems') || []).filter(p => !sbIds.has(p.id));
-      if (localOnly.length > 0) {
-        await SB.upsertAll('aa_problems', localOnly);
-        if (indicator) indicator.textContent = `✓ Migrated ${localOnly.length} local problems to Supabase`;
-        setTimeout(() => { if (indicator) indicator.textContent = ''; }, 4000);
-        return;
+      const localIds = new Set(local.map(a => a.id));
+      const sbOnly = sbAssignments.filter(a => !localIds.has(a.id));
+      if (sbOnly.length > 0) {
+        try { DB.set('assignments', [...local, ...sbOnly]); } catch(e) {}
       }
     }
 
     if (indicator) {
-      indicator.textContent = synced ? '✓ Synced' : '⚠ Offline — using local data';
-      setTimeout(() => { if (indicator) indicator.textContent = ''; }, 3000);
+      indicator.textContent = sbProblems !== null ? '✓ Synced' : '⚠ Offline';
+      setTimeout(() => { if (indicator) indicator.textContent = ''; }, 2500);
     }
   }
 };
@@ -2557,10 +2562,10 @@ async function submitUpload() {
 
   const problems = DB.getProblems();
   problems.push(p);
-  // Save to localStorage cache (best-effort — may fail if full)
-  try { DB.set('problems', problems); } catch (e) { /* cache full — Supabase is source of truth */ }
-  // Always push to Supabase
-  SB.upsertAll('aa_problems', problems);
+  // Save to localStorage cache
+  try { DB.set('problems', problems); } catch(e) { /* cache full — Supabase is source of truth */ }
+  // Upsert only the new problem to Supabase (fast, no race condition)
+  SB.upsert('aa_problems', p.id, p);
   addActivity(`Uploaded: T${topic} · ${subtopic} · ${level} · ${marks}m`, '⬆');
   toast('✓ Uploaded — sent to Review Queue');
   clearUploadForm();
@@ -5853,18 +5858,19 @@ window.addEventListener('DOMContentLoaded', () => {
   bootApp();
 });
 
-// After tutor app is visible, sync from Supabase in background
-// Re-renders all panels once fresh data arrives
+// Pull from Supabase on boot — adds any problems from other devices/sessions
+// Local data is never overwritten, only supplemented
 window._sbSyncDone = false;
 function triggerSupabaseSync() {
   if (window._sbSyncDone) return;
   window._sbSyncDone = true;
   DB.syncFromSupabase().then(() => {
-    // Re-render everything with fresh data
     renderDashboard();
     renderBank();
     updateReviewBadge();
     renderReviewQueue();
+    renderStudents();
+    renderAssignments();
   });
 }
 </script>
