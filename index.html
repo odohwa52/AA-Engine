@@ -2557,18 +2557,15 @@ async function submitUpload() {
 
   const problems = DB.getProblems();
   problems.push(p);
-  try {
-    DB.set('problems', problems); // local cache — may fail if browser cache is full
-  } catch (e) {
-    // localStorage full — that's OK, Supabase is the real store. Just skip local cache.
-  }
-  // Always push to Supabase regardless of localStorage state
+  // Save to localStorage cache (best-effort — may fail if full)
+  try { DB.set('problems', problems); } catch (e) { /* cache full — Supabase is source of truth */ }
+  // Always push to Supabase
   SB.upsertAll('aa_problems', problems);
   addActivity(`Uploaded: T${topic} · ${subtopic} · ${level} · ${marks}m`, '⬆');
   toast('✓ Uploaded — sent to Review Queue');
   clearUploadForm();
-  renderDashboard(); updateReviewBadge();
-  setTimeout(() => { showTab('review', document.getElementById('nav-review')); }, 800);
+  renderDashboard(); updateReviewBadge(); renderReviewQueue();
+  setTimeout(() => { showTab('review', document.getElementById('nav-review')); }, 400);
 }
 
 function extractFinalAnswer(solution) {
@@ -2787,8 +2784,8 @@ If issues found, set verified: false, list issues, and provide correctedMarksche
     addActivity(`Generated: T${topic} · ${subtopic} · ${level} · ${marks}m`, '★');
     btn.disabled = false; proc.style.display = 'none';
     toast('✓ Generated — sent to Review Queue');
-    renderDashboard(); updateReviewBadge();
-    setTimeout(() => showTab('review', document.getElementById('nav-review')), 600);
+    renderDashboard(); updateReviewBadge(); renderReviewQueue();
+    setTimeout(() => showTab('review', document.getElementById('nav-review')), 400);
 
   } catch (err) {
     btn.disabled = false; proc.style.display = 'none';
