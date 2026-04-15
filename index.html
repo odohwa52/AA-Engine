@@ -1242,25 +1242,26 @@ body.dark .processing-overlay { background: rgba(26,29,46,0.9); }
       <!-- LEFT: single page editor -->
       <div style="display:flex;flex-direction:column;border-right:1px solid var(--border);overflow:hidden;">
         <!-- Controls bar -->
-        <div style="padding:10px 16px;background:var(--bg);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap;flex-shrink:0;">
-          <span style="font-size:11.5px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.4px;">Scale:</span>
-          <input type="range" id="ipm-page-scale-slider" min="10" max="200" value="100"
-            style="flex:1;min-width:100px;accent-color:var(--accent);"
-            oninput="ipmPageScaleChanged(this.value)" />
-          <input type="number" id="ipm-page-scale-num" min="10" max="200" value="100"
-            style="width:52px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-weight:600;text-align:center;background:var(--surface);color:var(--text-primary);"
-            oninput="ipmPageScaleTyped(this.value)" />
-          <span style="font-size:12px;color:var(--text-secondary);">%</span>
+        <div style="padding:10px 16px;background:var(--bg);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;flex-wrap:wrap;flex-shrink:0;">
+          <!-- Pixel width control -->
+          <div style="display:flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:5px 10px;">
+            <span style="font-size:11.5px;font-weight:600;color:var(--text-secondary);white-space:nowrap;">Width:</span>
+            <input type="number" id="ipm-px-input" min="100" max="4000" placeholder="px"
+              style="width:70px;padding:3px 6px;border:1px solid var(--border);border-radius:5px;font-size:13px;font-weight:600;text-align:center;background:var(--bg);color:var(--text-primary);"
+              onkeydown="if(event.key==='Enter')ipmApplyPxWidth()" />
+            <span style="font-size:11.5px;color:var(--text-secondary);">px</span>
+            <button class="btn btn-primary btn-xs" onclick="ipmApplyPxWidth()">Resize</button>
+          </div>
+          <span id="ipm-natural-size" style="font-size:11.5px;color:var(--text-secondary);"></span>
+          <button class="btn btn-ghost btn-xs" onclick="ipmMatchWidthToPage(0)" id="ipm-match-btn" style="white-space:nowrap;">↔ Match page 1 width</button>
           <div style="width:1px;height:20px;background:var(--border);"></div>
-          <span style="font-size:11.5px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.4px;">Crop:</span>
-          <button class="btn btn-ghost btn-xs" id="ipm-crop-toggle" onclick="ipmToggleCrop()">✂ Enable crop</button>
+          <button class="btn btn-ghost btn-xs" id="ipm-crop-toggle" onclick="ipmToggleCrop()">✂ Crop</button>
           <button class="btn btn-primary btn-xs" id="ipm-crop-apply" style="display:none;" onclick="ipmApplyCrop()">Apply crop</button>
           <button class="btn btn-ghost btn-xs" id="ipm-crop-cancel" style="display:none;" onclick="ipmCancelCrop()">Cancel</button>
           <div style="margin-left:auto;display:flex;gap:6px;">
-            ${''/* move buttons handled per-page */}
-            <button class="btn btn-ghost btn-xs" id="ipm-move-up" onclick="ipmMoveCurrentPage(-1)">↑ Move up</button>
-            <button class="btn btn-ghost btn-xs" id="ipm-move-down" onclick="ipmMoveCurrentPage(1)">↓ Move down</button>
-            <button class="strip-btn danger" style="border:1px solid #FCA5A5;border-radius:5px;padding:3px 8px;font-size:11px;" onclick="ipmRemoveCurrentPage()">✕ Remove page</button>
+            <button class="btn btn-ghost btn-xs" id="ipm-move-up" onclick="ipmMoveCurrentPage(-1)">↑</button>
+            <button class="btn btn-ghost btn-xs" id="ipm-move-down" onclick="ipmMoveCurrentPage(1)">↓</button>
+            <button class="strip-btn danger" style="border:1px solid #FCA5A5;border-radius:5px;padding:3px 8px;font-size:11px;" onclick="ipmRemoveCurrentPage()">✕</button>
           </div>
         </div>
         <!-- Image canvas area -->
@@ -4894,30 +4895,41 @@ function renderIpmEditor() {
   if (up) up.disabled = idx === 0;
   if (down) down.disabled = idx === images.length - 1;
 
-  if (!entry) return;
-  const scale = entry.scale ?? 100;
+  const matchBtn = document.getElementById('ipm-match-btn');
 
-  const slider = document.getElementById('ipm-page-scale-slider');
-  const num = document.getElementById('ipm-page-scale-num');
-  if (slider) slider.value = scale;
-  if (num) num.value = scale;
+  if (!entry) return;
 
   const img = document.getElementById('ipm-editor-img');
-  if (img) {
-    img.onload = () => {
-      // Show at actual pixel size so scale is meaningful
-      // Cap at editor area width so it doesn't overflow
-      const area = document.getElementById('ipm-editor-area');
-      const maxW = area ? area.clientWidth - 32 : 600;
-      const targetW = Math.min(Math.round(img.naturalWidth * scale / 100), maxW);
-      img.style.width = targetW + 'px';
-      img.style.maxWidth = '100%';
-    };
-    if (img.src !== entry.dataUrl) {
-      img.src = entry.dataUrl;
-    } else {
-      img.onload();
+  if (!img) return;
+
+  const updateControls = () => {
+    const natW = img.naturalWidth;
+    const natH = img.naturalHeight;
+    const targetW = entry.pxWidth || natW;
+    const pxInput = document.getElementById('ipm-px-input');
+    if (pxInput) pxInput.value = targetW;
+    const sizeLabel = document.getElementById('ipm-natural-size');
+    if (sizeLabel) sizeLabel.textContent = `Original: ${natW}×${natH}px  →  Current: ${entry.pxWidth||natW}px`;
+    if (matchBtn) {
+      const ref = images[0];
+      const refW = ref?.pxWidth || ref?._natW;
+      matchBtn.textContent = refW ? `↔ Match page 1 (${refW}px)` : '↔ Match page 1 width';
+      matchBtn.setAttribute('onclick', 'ipmMatchWidthToPage(0)');
+      matchBtn.style.display = idx === 0 ? 'none' : '';
     }
+    const area = document.getElementById('ipm-editor-area');
+    const maxW = area ? area.clientWidth - 32 : 700;
+    img.style.width = Math.min(entry.pxWidth || natW, maxW) + 'px';
+    img.style.maxWidth = 'none';
+  };
+
+  if (img.src !== entry.dataUrl) {
+    img.onload = () => { entry._natW = img.naturalWidth; entry._natH = img.naturalHeight; updateControls(); };
+    img.src = entry.dataUrl;
+  } else if (img.naturalWidth) {
+    entry._natW = img.naturalWidth; entry._natH = img.naturalHeight; updateControls();
+  } else {
+    img.onload = () => { entry._natW = img.naturalWidth; entry._natH = img.naturalHeight; updateControls(); };
   }
 
   ipmCancelCrop();
@@ -4931,32 +4943,57 @@ function ipmNavPage(dir) {
   renderIpmCombinedPreview();
 }
 
-function ipmPageScaleChanged(val) {
-  val = Math.max(10, Math.min(200, parseInt(val) || 100));
-  const num = document.getElementById('ipm-page-scale-num');
-  if (num) num.value = val;
+// Resize current page to exact pixel width — bakes into the image data
+function ipmApplyPxWidth() {
+  const input = document.getElementById('ipm-px-input');
+  const targetW = parseInt(input?.value);
+  if (!targetW || targetW < 50 || targetW > 5000) { toast('⚠ Enter a width between 50 and 5000 px'); return; }
   const images = ipmCurrentType === 'q' ? uploadQImages : uploadSImages;
   const entry = images[ipmCurrentPage];
-  if (entry) entry.scale = val;
-  // Update editor image size at actual pixels
-  const img = document.getElementById('ipm-editor-img');
-  if (img && img.naturalWidth) {
-    const area = document.getElementById('ipm-editor-area');
-    const maxW = area ? area.clientWidth - 32 : 600;
-    const targetW = Math.min(Math.round(img.naturalWidth * val / 100), maxW);
-    img.style.width = targetW + 'px';
-  }
-  renderIpmCombinedPreview();
-  renderUploadZone(ipmCurrentType);
+  if (!entry) return;
+  const src = new Image();
+  src.onload = () => {
+    const aspect = src.naturalHeight / src.naturalWidth;
+    const targetH = Math.round(targetW * aspect);
+    const canvas = document.createElement('canvas');
+    canvas.width = targetW; canvas.height = targetH;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, targetW, targetH);
+    ctx.drawImage(src, 0, 0, targetW, targetH);
+    entry.dataUrl = canvas.toDataURL('image/png');
+    entry.pxWidth = targetW;
+    entry._natW = targetW; entry._natH = targetH;
+    renderIpmEditor();
+    renderIpmCombinedPreview();
+    renderUploadZone(ipmCurrentType);
+    toast(`✓ Page ${ipmCurrentPage+1} resized to ${targetW}px wide`);
+  };
+  src.src = entry.dataUrl;
 }
 
-function ipmPageScaleTyped(val) {
-  const n = parseInt(val);
-  if (isNaN(n) || n < 10 || n > 200) return;
-  const slider = document.getElementById('ipm-page-scale-slider');
-  if (slider) slider.value = Math.min(n, 100);
-  ipmPageScaleChanged(n);
+// Resize current page to match the pixel width of a reference page
+function ipmMatchWidthToPage(refIdx) {
+  const images = ipmCurrentType === 'q' ? uploadQImages : uploadSImages;
+  const ref = images[refIdx];
+  if (!ref) return;
+  const getW = (cb) => {
+    if (ref.pxWidth) { cb(ref.pxWidth); return; }
+    if (ref._natW) { cb(ref._natW); return; }
+    const tmp = new Image();
+    tmp.onload = () => { ref._natW = tmp.naturalWidth; cb(tmp.naturalWidth); };
+    tmp.src = ref.dataUrl;
+  };
+  getW(w => {
+    const pxInput = document.getElementById('ipm-px-input');
+    if (pxInput) pxInput.value = w;
+    ipmApplyPxWidth();
+  });
 }
+
+function ipmPageScaleChanged(val) { /* kept for compat */ }
+function ipmPageScaleTyped(val) { /* kept for compat */ }
+
 
 // ── Crop tool ──
 function ipmToggleCrop() {
@@ -5072,43 +5109,45 @@ function renderIpmCombinedPreview() {
   const container = document.getElementById('ipm-combined-preview');
   if (!container) return;
 
-  // We need to know natural widths to normalise. Load all images then render.
-  // Use a promise-based approach with a simple cache on each entry.
-  const loadAllNaturalWidths = () => {
-    return Promise.all(images.map(entry => {
-      if (entry._natW) return Promise.resolve(entry._natW);
-      return new Promise(resolve => {
-        const img = new Image();
-        img.onload = () => { entry._natW = img.naturalWidth; entry._natH = img.naturalHeight; resolve(img.naturalWidth); };
-        img.src = entry.dataUrl;
-      });
-    }));
-  };
+  const loadAllWidths = () => Promise.all(images.map(entry => {
+    // Use pxWidth (baked) first, then cached _natW, then load
+    if (entry.pxWidth) { entry._natW = entry.pxWidth; return Promise.resolve(entry.pxWidth); }
+    if (entry._natW) return Promise.resolve(entry._natW);
+    return new Promise(resolve => {
+      const img = new Image();
+      img.onload = () => { entry._natW = img.naturalWidth; entry._natH = img.naturalHeight; resolve(img.naturalWidth); };
+      img.src = entry.dataUrl;
+    });
+  }));
 
-  loadAllNaturalWidths().then(() => {
-    // Compute each page's scaled width in pixels
-    const scaledWidths = images.map(e => Math.round((e._natW || 800) * (e.scale ?? 100) / 100));
-    // Reference width = the widest page after scaling
-    const refW = Math.max(...scaledWidths);
-    const previewW = container.clientWidth - 24; // available display width
+  loadAllWidths().then(() => {
+    // Each page's actual pixel width after any resize
+    const pxWidths = images.map(e => e.pxWidth || e._natW || 800);
+    // The widest page sets the reference — all others shrink proportionally in the preview
+    const refW = Math.max(...pxWidths);
 
     container.innerHTML = images.map((entry, idx) => {
-      const scaledW = scaledWidths[idx];
-      // Display scale so all pages appear the same visual width
-      const displayPct = refW > 0 ? (scaledW / refW * 100) : 100;
+      const myW = pxWidths[idx];
+      // Show each page at the fraction of the widest — so they line up like a real document
+      const displayPct = refW > 0 ? (myW / refW * 100).toFixed(1) : 100;
       const isActive = idx === ipmCurrentPage;
-      return `<div style="cursor:pointer;outline:${isActive?'2px solid var(--accent)':'2px solid transparent'};outline-offset:-1px;background:#ffffff;" 
+      return `<div style="cursor:pointer;background:#ffffff;outline:${isActive?'2px solid var(--accent)':'2px solid transparent'};outline-offset:-1px;" 
         onclick="ipmJumpToPage(${idx})" title="Click to edit page ${idx+1}">
-        <img src="${entry.dataUrl}" 
-          style="width:${displayPct}%;display:block;background:#ffffff;margin:0;" />
+        <img src="${entry.dataUrl}" style="width:${displayPct}%;display:block;background:#ffffff;margin:0;" />
         <div style="background:${isActive?'var(--accent-light)':'var(--bg)'};padding:2px 8px;font-size:10px;color:${isActive?'var(--accent)':'var(--text-secondary)'};border-top:1px solid var(--border);">
-          Page ${idx+1} · ${entry.scale??100}% scale${isActive?' · editing':''}
+          Page ${idx+1} — ${myW}px wide${isActive?' · currently editing':''}
         </div>
       </div>`;
     }).join('');
 
     const hint = document.getElementById('ipm-preview-hint');
-    if (hint) hint.textContent = `${images.length} page${images.length!==1?'s':''} · All aligned to same width · Click to edit`;
+    if (hint) {
+      const allSame = pxWidths.every(w => w === pxWidths[0]);
+      hint.textContent = allSame
+        ? `✓ All ${images.length} pages are ${pxWidths[0]}px wide — ready`
+        : `⚠ Pages have different widths — resize to match · Click to edit`;
+      hint.style.color = allSame ? 'var(--green)' : 'var(--amber)';
+    }
   });
 }
 
